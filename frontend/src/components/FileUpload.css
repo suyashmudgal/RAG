@@ -1,0 +1,39 @@
+/* ── FileUpload ──────────────────────────────────────────────────────────── */
+
+.file-upload { padding: 12px; }
+
+.drop-zone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 24px 16px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: center;
+}
+.drop-zone:hover              { border-color: var(--accent); background: var(--accent-dim); }
+.drop-zone.dragging           { border-color: var(--accent); background: var(--accent-dim); transform: scale(1.02); }
+.drop-zone.uploading          { cursor: wait; border-color: var(--accent); border-style: solid; }
+
+.upload-icon { font-size: 24px; }
+.upload-text { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+.upload-hint { font-size: 11px; color: var(--text-muted); }
+
+/* status toast */
+.upload-status {
+  position: relative;
+  margin-top: 8px; padding: 10px 32px 10px 12px;
+  border-radius: var(--radius-md);
+  font-size: 12px; line-height: 1.5;
+}
+.upload-status.success  { background: var(--success-bg); border: 1px solid rgba(74,222,128,.2); color: var(--success); }
+.upload-status.error    { background: var(--error-bg);   border: 1px solid rgba(248,113,113,.2); color: var(--error); }
+.upload-status.uploading{ background: var(--accent-dim); border: 1px solid rgba(124,106,239,.2); color: var(--accent); }
+.upload-status p { margin: 2px 0; }
+
+.dismiss-btn {
+  position: absolute; top: 6px; right: 8px;
+  background: none; border: none; color: inherit;
+  cursor: pointer; font-size: 16px; opacity: .7; padding: 2px 6px;
+}
+.dismiss-btn:hover { opacity: 1; }

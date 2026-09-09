@@ -1,0 +1,322 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   MarkdownRenderer — ChatGPT-style Response Formatting
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.markdown-content {
+  color: var(--text-primary);
+  font-size: 14.5px;
+  line-height: 1.75;
+  letter-spacing: -0.01em;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  width: 100%;
+}
+
+/* ── Headings ───────────────────────────────────────────────────────────── */
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  color: #f5f5fc;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-content > :first-child:is(h1, h2, h3, h4, h5, h6) {
+  margin-top: 0;
+}
+
+.markdown-content h1 {
+  font-size: 1.45rem;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+
+.markdown-content h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.markdown-content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #e2e2fa;
+}
+
+.markdown-content h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #d0d0f0;
+}
+
+/* ── Paragraphs & Text ──────────────────────────────────────────────────── */
+
+.markdown-content p {
+  margin-bottom: 1em;
+}
+
+.markdown-content > p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content strong,
+.markdown-content b {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.markdown-content em,
+.markdown-content i {
+  font-style: italic;
+  color: #dedef8;
+}
+
+.markdown-content hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}
+
+/* ── Lists ──────────────────────────────────────────────────────────────── */
+
+.markdown-content ul,
+.markdown-content ol {
+  margin: 0.75em 0 1em 1.4em;
+  padding-left: 0.25em;
+}
+
+.markdown-content li {
+  margin-bottom: 0.4em;
+  line-height: 1.65;
+}
+
+.markdown-content li > p {
+  margin-bottom: 0.4em;
+}
+
+.markdown-content li > ul,
+.markdown-content li > ol {
+  margin: 0.35em 0 0.4em 1.2em;
+}
+
+/* ── Blockquotes ────────────────────────────────────────────────────────── */
+
+.markdown-blockquote {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-dim);
+  padding: 10px 16px;
+  margin: 1.2em 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.markdown-blockquote p {
+  margin-bottom: 0.5em;
+}
+
+.markdown-blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Links ──────────────────────────────────────────────────────────────── */
+
+.markdown-link {
+  color: var(--accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color var(--transition);
+}
+
+.markdown-link:hover {
+  color: #ffffff;
+}
+
+/* ── Tables ─────────────────────────────────────────────────────────────── */
+
+.markdown-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 1.25em 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  -webkit-overflow-scrolling: touch;
+}
+
+.markdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.markdown-thead {
+  background: var(--bg-elevated);
+  border-bottom: 2px solid var(--border);
+}
+
+.markdown-th {
+  padding: 11px 16px;
+  font-weight: 600;
+  color: #ffffff;
+  border-right: 1px solid var(--border);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.markdown-th:last-child {
+  border-right: none;
+}
+
+.markdown-td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  vertical-align: top;
+  white-space: normal;
+  word-break: normal;
+}
+
+.markdown-td:last-child {
+  border-right: none;
+}
+
+.markdown-tbody .markdown-tr:last-child .markdown-td {
+  border-bottom: none;
+}
+
+.markdown-tbody .markdown-tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.markdown-tbody .markdown-tr:hover {
+  background: rgba(124, 106, 239, 0.06);
+}
+
+/* ── Inline Code ────────────────────────────────────────────────────────── */
+
+.inline-code {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--bg-elevated);
+  color: #c4b5fd;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-light);
+  word-break: break-word;
+}
+
+/* ── Code Blocks ────────────────────────────────────────────────────────── */
+
+.code-block-wrapper {
+  margin: 1.25em 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #0d0d18;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.code-lang-tag {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.copy-code-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.copy-code-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+.copy-code-btn.copied {
+  color: var(--success);
+  border-color: var(--success);
+  background: var(--success-bg);
+}
+
+.code-block-body {
+  overflow-x: auto;
+}
+
+.code-block-body pre {
+  margin: 0 !important;
+  border-radius: 0 !important;
+}
+
+/* ── KaTeX Math Formulae ────────────────────────────────────────────────── */
+
+.markdown-content .katex-display {
+  margin: 1.2em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 0;
+  max-width: 100%;
+}
+
+.markdown-content .katex {
+  font-size: 1.05em;
+  text-rendering: auto;
+}
+
+/* ── Streaming Cursor ───────────────────────────────────────────────────── */
+
+.streaming-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 16px;
+  background-color: var(--accent);
+  margin-left: 4px;
+  vertical-align: -2px;
+  border-radius: 2px;
+  animation: pulseBlink 0.8s ease-in-out infinite;
+}
+
+@keyframes pulseBlink {
+  0%, 100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  50% {
+    opacity: 0.15;
+    transform: scaleY(0.85);
+  }
+}

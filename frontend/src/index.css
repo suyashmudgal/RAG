@@ -1,0 +1,90 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   DocChat AI — Global Design System
+   Dark-themed, modern, premium UI
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* ── Tokens ─────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Surfaces */
+  --bg-primary:   #0a0a12;
+  --bg-secondary: #111120;
+  --bg-surface:   #16162a;
+  --bg-elevated:  #1e1e3a;
+  --bg-hover:     #252545;
+
+  /* Borders */
+  --border:       #2a2a4a;
+  --border-light: #35355a;
+
+  /* Accent */
+  --accent:       #7c6aef;
+  --accent-hover: #9583ff;
+  --accent-dim:   rgba(124, 106, 239, 0.15);
+
+  /* Text */
+  --text-primary:   #e8e8f0;
+  --text-secondary: #9898b8;
+  --text-muted:     #6868a0;
+
+  /* Semantic */
+  --success:    #4ade80;
+  --success-bg: rgba(74, 222, 128, 0.10);
+  --error:      #f87171;
+  --error-bg:   rgba(248, 113, 113, 0.10);
+  --warning:    #fbbf24;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* Misc */
+  --shadow-md: 0 4px 24px rgba(0, 0, 0, 0.35);
+  --transition: 0.2s ease;
+}
+
+/* ── Reset ──────────────────────────────────────────────────────────────── */
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root { width: 100vw; height: 100vh; overflow: hidden; }
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar       { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+/* ── Shared utilities ───────────────────────────────────────────────────── */
+
+.spinner {
+  width: 22px; height: 22px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+.spinner-small {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }

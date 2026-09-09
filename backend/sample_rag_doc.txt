@@ -1,0 +1,9 @@
+Project Blueprint: DocChat AI.
+
+DocChat AI is an enterprise document assistant powered by LangChain, FastAPI, and ChromaDB.
+It supports PDF, DOCX, and TXT document ingestion.
+Chunking is performed using LangChain's RecursiveCharacterTextSplitter with chunk size 800 and overlap 200.
+Embeddings are computed locally using sentence-transformers all-MiniLM-L6-v2 via LangChain HuggingFaceEmbeddings.
+The LLM is powered by Groq (llama-3.3-70b-versatile) via LangChain ChatGroq.
+Vector search retrieves the top 5 most relevant passages.
+Chat supports conversational memory keeping the last 20 messages.

@@ -1,0 +1,35 @@
+/* ── SourceCitations ─────────────────────────────────────────────────────── */
+
+.source-citations {
+  margin-top: 12px; padding: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.citations-header {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: .5px;
+  margin-bottom: 8px;
+}
+.citations-icon { font-size: 14px; }
+
+.citations-list { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.citation-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 20px; font-size: 12px;
+  transition: all var(--transition);
+}
+.citation-chip:hover { border-color: var(--accent); background: var(--accent-dim); }
+
+.citation-file-icon { font-size: 14px; }
+.citation-filename  { color: var(--text-primary); font-weight: 500; }
+.citation-page {
+  color: var(--text-muted); font-size: 11px;
+  padding-left: 6px; border-left: 1px solid var(--border);
+}
