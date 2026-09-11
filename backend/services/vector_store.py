@@ -89,6 +89,37 @@ class VectorStore:
         k = min(top_k, self._chunk_count)
         return self.vectorstore.similarity_search_with_score(query, k=k)
 
+    def get_chunks_by_page(
+        self, page_number: int, document_id: str | None = None
+    ) -> list[Document]:
+        """Return all chunks belonging to a specific page number.
+
+        Optionally filter by *document_id* when multiple documents exist.
+        """
+        collection = self.vectorstore._collection
+        where_filter: dict = {"page_number": page_number}
+        if document_id:
+            where_filter = {
+                "$and": [
+                    {"page_number": page_number},
+                    {"document_id": document_id},
+                ]
+            }
+
+        try:
+            results = collection.get(where=where_filter, include=["documents", "metadatas"])
+            docs: list[Document] = []
+            for text, meta in zip(results["documents"] or [], results["metadatas"] or []):
+                docs.append(Document(page_content=text, metadata=meta))
+            return docs
+        except Exception as exc:
+            logger.warning("get_chunks_by_page error: %s", exc)
+            return []
+
+    def get_all_metadata(self) -> dict[str, dict]:
+        """Return the full document-metadata dictionary."""
+        return dict(self._doc_metadata)
+
     def delete_document(self, document_id: str) -> None:
         """Remove every chunk belonging to *document_id*."""
         collection = self.vectorstore._collection

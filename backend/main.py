@@ -31,6 +31,11 @@ async def lifespan(_app: FastAPI):
     """Run startup / shutdown logic."""
     logger.info("🚀 Starting DocChat AI Backend")
 
+    # Initialize auth database
+    from auth.database import init_db
+
+    await init_db()
+
     # Check Groq key
     if not settings.groq_api_key:
         logger.warning("⚠️  GROQ_API_KEY is not set — chat will NOT work.")
@@ -83,10 +88,12 @@ async def _global_exception_handler(_request: Request, exc: Exception):
 
 # ── Routers ─────────────────────────────────────────────────────────────────
 
+from auth.router import router as auth_router  # noqa: E402
 from routes.chat import router as chat_router  # noqa: E402
 from routes.documents import router as documents_router  # noqa: E402
 from routes.upload import router as upload_router  # noqa: E402
 
+app.include_router(auth_router, tags=["Auth"])
 app.include_router(upload_router, tags=["Upload"])
 app.include_router(documents_router, tags=["Documents"])
 app.include_router(chat_router, tags=["Chat"])

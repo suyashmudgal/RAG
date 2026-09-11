@@ -21,7 +21,7 @@ export default function FileUpload({ onUploadComplete }) {
       if (!ALLOWED_EXTS.includes(ext)) {
         errors.push(`${f.name}: unsupported format`);
       } else if (f.size > MAX_SIZE_MB * 1024 * 1024) {
-        errors.push(`${f.name}: exceeds ${MAX_SIZE_MB} MB`);
+        errors.push(`${f.name}: exceeds ${MAX_SIZE_MB} MB limit`);
       } else {
         valid.push(f);
       }
@@ -31,48 +31,57 @@ export default function FileUpload({ onUploadComplete }) {
 
   /* ── upload handler ─────────────────────────────────────────────────── */
 
-  const handleUpload = useCallback(async (fileList) => {
-    const { valid, errors } = validate(fileList);
+  const handleUpload = useCallback(
+    async (fileList) => {
+      const { valid, errors } = validate(fileList);
 
-    if (errors.length && !valid.length) {
-      setStatus({ type: 'error', msgs: errors });
-      return;
-    }
-    if (!valid.length) return;
+      if (errors.length && !valid.length) {
+        setStatus({ type: 'error', msgs: errors });
+        return;
+      }
+      if (!valid.length) return;
 
-    setUploading(true);
-    setStatus({ type: 'uploading', msgs: [`Processing ${valid.length} file(s)…`] });
+      setUploading(true);
+      setStatus({ type: 'uploading', msgs: [`Processing ${valid.length} file(s)…`] });
 
-    try {
-      const data = await uploadFiles(valid);
-      const results = data.results || [];
-      const ok = results.filter((r) => r.status !== 'error');
-      const fail = results.filter((r) => r.status === 'error');
+      try {
+        const data = await uploadFiles(valid);
+        const results = data.results || [];
+        const ok = results.filter((r) => r.status !== 'error');
+        const fail = results.filter((r) => r.status === 'error');
 
-      const msgs = [
-        ...(ok.length ? [`✅ ${ok.length} file(s) processed`] : []),
-        ...fail.map((f) => `❌ ${f.filename}: ${f.message}`),
-        ...errors.map((e) => `⚠️ ${e}`),
-      ];
+        const msgs = [
+          ...(ok.length ? [`Successfully indexed ${ok.length} file(s)`] : []),
+          ...fail.map((f) => `${f.filename}: ${f.message}`),
+          ...errors.map((e) => `Warning: ${e}`),
+        ];
 
-      setStatus({
-        type: fail.length && !ok.length ? 'error' : 'success',
-        msgs,
-      });
+        setStatus({
+          type: fail.length && !ok.length ? 'error' : 'success',
+          msgs,
+        });
 
-      if (ok.length) onUploadComplete?.();
-    } catch (err) {
-      setStatus({ type: 'error', msgs: [err.message] });
-    } finally {
-      setUploading(false);
-      if (inputRef.current) inputRef.current.value = '';
-    }
-  }, [onUploadComplete]);
+        if (ok.length) onUploadComplete?.();
+      } catch (err) {
+        setStatus({ type: 'error', msgs: [err.message] });
+      } finally {
+        setUploading(false);
+        if (inputRef.current) inputRef.current.value = '';
+      }
+    },
+    [onUploadComplete]
+  );
 
   /* ── drag handlers ──────────────────────────────────────────────────── */
 
-  const onDragOver  = (e) => { e.preventDefault(); setIsDragging(true); };
-  const onDragLeave = (e) => { e.preventDefault(); setIsDragging(false); };
+  const onDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  const onDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
   const onDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
@@ -89,18 +98,27 @@ export default function FileUpload({ onUploadComplete }) {
         onDragLeave={onDragLeave}
         onDrop={onDrop}
         onClick={() => !uploading && inputRef.current?.click()}
+        role="button"
+        tabIndex={0}
+        aria-label="Upload files"
       >
         {uploading ? (
-          <>
+          <div className="uploading-state">
             <div className="spinner" />
-            <span>Processing documents…</span>
-          </>
+            <span className="uploading-text">Indexing into ChromaDB…</span>
+          </div>
         ) : (
-          <>
-            <span className="upload-icon">⬆️</span>
-            <span className="upload-text">Drop files or click to upload</span>
-            <span className="upload-hint">PDF, DOCX, TXT — max {MAX_SIZE_MB} MB</span>
-          </>
+          <div className="drop-zone-content">
+            <div className="upload-icon-circle">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            </div>
+            <span className="upload-primary-text">Click to upload or drag &amp; drop</span>
+            <span className="upload-sub-text">PDF, DOCX, TXT · Max {MAX_SIZE_MB}MB</span>
+          </div>
         )}
       </div>
 
@@ -114,9 +132,22 @@ export default function FileUpload({ onUploadComplete }) {
       />
 
       {status && (
-        <div className={`upload-status ${status.type}`}>
-          {status.msgs.map((m, i) => <p key={i}>{m}</p>)}
-          <button className="dismiss-btn" onClick={() => setStatus(null)}>×</button>
+        <div className={`upload-status status-${status.type}`}>
+          <div className="status-msgs">
+            {status.msgs.map((m, i) => (
+              <p key={i} className="status-msg-line">
+                {m}
+              </p>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="dismiss-status-btn"
+            onClick={() => setStatus(null)}
+            aria-label="Dismiss message"
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>

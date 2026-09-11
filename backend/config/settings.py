@@ -31,6 +31,17 @@ class Settings(BaseSettings):
     citation_margin: float = 0.25
     max_citations: int = 4
 
+    # --- Authentication ---
+    jwt_secret_key: str = "change-me-to-a-random-secret"
+    jwt_expiry_hours: int = 72
+    auth_db_path: str = "./auth.db"
+
+    # --- Google OAuth ---
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:8000/auth/google/callback"
+    frontend_url: str = "http://localhost:5173"
+
     # --- Server ---
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 

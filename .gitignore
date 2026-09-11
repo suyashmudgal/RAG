@@ -9,8 +9,11 @@ __pycache__/
 *$py.class
 *.so
 .pytest_cache/
-.coverage
-htmlcov/
+# SQLite & Databases
+*.db
+*.sqlite
+*.sqlite3
+
 
 # Virtual environments
 venv/

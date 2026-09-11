@@ -23,3 +23,8 @@ sentence-transformers
 
 # ── Vector DB ─────────────────────────────────────────────────────────────
 chromadb
+
+# ── Authentication ────────────────────────────────────────────────────────
+pyjwt
+bcrypt
+aiosqlite

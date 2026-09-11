@@ -1,9 +1,94 @@
 /* eslint-disable no-unused-vars */
 /**
  * API client — all fetch wrappers for the FastAPI backend.
+ * Includes credentials: 'include' for secure cookie-based authentication.
  */
 
 const API_BASE = 'http://localhost:8000';
+
+/* ── Auth API ───────────────────────────────────────────────────────────── */
+
+export async function apiSignUp(name, email, password) {
+  const res = await fetch(`${API_BASE}/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ name, email, password }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Sign up failed' }));
+    throw new Error(err.detail || 'Sign up failed');
+  }
+  return res.json();
+}
+
+export async function apiSignIn(email, password) {
+  const res = await fetch(`${API_BASE}/auth/signin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Sign in failed' }));
+    throw new Error(err.detail || 'Sign in failed');
+  }
+  return res.json();
+}
+
+export async function apiSignOut() {
+  const res = await fetch(`${API_BASE}/auth/signout`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Sign out failed' }));
+    throw new Error(err.detail || 'Sign out failed');
+  }
+  return res.json();
+}
+
+export async function apiGetMe() {
+  const res = await fetch(`${API_BASE}/auth/me`, {
+    method: 'GET',
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Not authenticated' }));
+    throw new Error(err.detail || 'Not authenticated');
+  }
+  return res.json();
+}
+
+export async function apiGoogleAuth(credential) {
+  const res = await fetch(`${API_BASE}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ credential }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Google sign in failed' }));
+    throw new Error(err.detail || 'Google sign in failed');
+  }
+  return res.json();
+}
+
+export async function apiGetAuthConfig() {
+  try {
+    const res = await fetch(`${API_BASE}/auth/config`);
+    if (!res.ok) return { google_client_id: '', google_enabled: false };
+    return res.json();
+  } catch {
+    return { google_client_id: '', google_enabled: false };
+  }
+}
+
 
 /* ── Upload ─────────────────────────────────────────────────────────────── */
 
@@ -15,6 +100,7 @@ export async function uploadFiles(files) {
 
   const res = await fetch(`${API_BASE}/upload`, {
     method: 'POST',
+    credentials: 'include',
     body: formData,
   });
 
@@ -28,7 +114,9 @@ export async function uploadFiles(files) {
 /* ── Documents ──────────────────────────────────────────────────────────── */
 
 export async function getDocuments() {
-  const res = await fetch(`${API_BASE}/documents`);
+  const res = await fetch(`${API_BASE}/documents`, {
+    credentials: 'include',
+  });
   if (!res.ok) throw new Error('Failed to fetch documents');
   return res.json();
 }
@@ -36,6 +124,7 @@ export async function getDocuments() {
 export async function deleteDocument(documentId) {
   const res = await fetch(`${API_BASE}/documents/${documentId}`, {
     method: 'DELETE',
+    credentials: 'include',
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Delete failed' }));
@@ -50,6 +139,7 @@ export async function sendMessage(question, sessionId) {
   const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ question, session_id: sessionId }),
   });
 
@@ -69,6 +159,7 @@ export async function streamMessage(question, sessionId, onToken, onSources, onE
     const res = await fetch(`${API_BASE}/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ question, session_id: sessionId }),
     });
 
