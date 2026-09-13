@@ -1,213 +1,274 @@
-# DocChat AI — RAG Document Chatbot
+# 🚀 DocChat AI — RAG Document Intelligence Platform
 
-An AI-powered document chatbot that lets you upload documents (PDF, DOCX, TXT),
-ask questions about them, and get grounded answers with source citations.
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-18.3-61DAFB.svg)](https://react.dev)
+[![Vite](https://img.shields.io/badge/Vite-5.4-646CFF.svg)](https://vitejs.dev)
+[![ChromaDB](https://img.shields.io/badge/ChromaDB-0.6-orange.svg)](https://www.trychroma.com)
+[![Groq](https://img.shields.io/badge/Groq-LPU_Inference-f55036.svg)](https://groq.com)
 
-Built with **LangChain**, **FastAPI**, **React**, **ChromaDB**, and **Groq**.
+**DocChat AI** is a full-stack, retrieval-augmented generation (RAG) web application that empowers users to upload documents (`PDF`, `DOCX`, `TXT`), query them in natural language, and receive grounded answers backed by precise, verifiable page-level source citations.
 
 ---
 
-## Architecture
+## 📑 Full Documentation Reference
 
+> 📖 **Looking for in-depth architecture diagrams, citation math, and internal subsystem specifications?**  
+> Check out the complete reference: [**`DOCUMENTATION.md`**](./DOCUMENTATION.md)
+
+---
+
+## ✨ Features at a Glance
+
+- 📄 **Multi-Format Ingestion:** Drag-and-drop support for PDF, DOCX, and TXT documents.
+- 🎯 **Zero-Hallucination Grounding:** Multi-stage citation engine filters ungrounded claims, negative answers, and low-confidence chunks.
+- ⚡ **Real-Time Token Streaming:** Server-Sent Events (SSE) stream responses instantly.
+- 🧠 **Free Local Embeddings:** `sentence-transformers/all-MiniLM-L6-v2` runs locally on your CPU (zero embedding API costs).
+- ⚡ **Ultra-Fast LLM Inference:** Powered by Groq's high-speed inference engine (`openai/gpt-oss-120b` or `llama-3.3-70b-versatile`).
+- 🔐 **Dual Authentication:** Secure email/password authentication (bcrypt + HTTP-only JWT cookies) + Google OAuth 2.0 (Google Identity Services One-Tap & server-side redirect).
+- 🌓 **Dark & Light Mode:** Fluid design system with custom CSS variables, glassmorphism, and responsive layout.
+- 💬 **Conversational Memory:** Contextual multi-turn dialogue with prompt suggestions and markdown formatting.
+
+---
+
+## 🏗️ System Architecture
+
+```mermaid
+flowchart LR
+    subgraph Client ["Frontend (React 18 + Vite)"]
+        UI["Landing Page / Auth / Chat Workspace"]
+        AuthCtx["Auth Context (JWT Cookie)"]
+        Theme["Theme Toggle (Dark/Light)"]
+    end
+
+    subgraph API ["Backend (FastAPI)"]
+        AuthRoute["/auth (JWT & Google SSO)"]
+        UploadRoute["/upload (Text Extraction & Splitter)"]
+        ChatRoute["/chat/stream (RAG & SSE Engine)"]
+    end
+
+    subgraph Storage ["Persistence"]
+        AuthDB[("SQLite (auth.db)")]
+        Chroma[("ChromaDB (./chroma_db)")]
+        Disk[("./uploads")]
+    end
+
+    subgraph External ["External Services"]
+        Groq["Groq Cloud LLM"]
+        Google["Google OAuth 2.0"]
+        HF["HuggingFace (all-MiniLM-L6-v2)"]
+    end
+
+    Client <-->|REST & SSE| API
+    AuthRoute <--> AuthDB
+    AuthRoute <--> Google
+    UploadRoute --> Disk
+    UploadRoute --> HF --> Chroma
+    ChatRoute --> Chroma
+    ChatRoute --> Groq
 ```
-React Frontend (Vite)
-       │
-       ▼
-FastAPI Backend
-       │
-       ├─ File Upload & Validation
-       │        │
-       │        ▼
-       ├─ Text Extraction (LangChain Loaders)
-       │        │
-       │        ▼
-       ├─ Text Chunking (LangChain RecursiveCharacterTextSplitter)
-       │        │
-       │        ▼
-       ├─ Embeddings (HuggingFace all-MiniLM-L6-v2 — local, free)
-       │        │
-       │        ▼
-       ├─ Vector Store (ChromaDB — persistent)
-       │
-       └─ RAG Chat
-            ├─ Semantic Retrieval (ChromaDB)
-            ├─ Context Building
-            ├─ LLM (Groq — llama-3.3-70b-versatile)
-            ├─ Streaming Response (SSE)
-            ├─ Conversation Memory
-            └─ Source Citations
-```
 
-## Tech Stack
+---
 
-| Layer              | Technology                                  |
-|--------------------|---------------------------------------------|
-| Frontend           | React 18, Vite, Vanilla CSS                 |
-| Backend            | FastAPI, Uvicorn                             |
-| LLM                | Groq API (llama-3.3-70b-versatile) — **free** |
-| Embeddings         | sentence-transformers (all-MiniLM-L6-v2) — **local, free** |
-| Vector Database    | ChromaDB (persistent, file-backed)          |
-| Document Loaders   | LangChain (PyPDFLoader, Docx2txtLoader, TextLoader) |
-| Text Splitting     | LangChain RecursiveCharacterTextSplitter    |
-| Orchestration      | LangChain (embeddings, vector store, LLM)   |
-
-## Folder Structure
+## 📁 Repository Structure
 
 ```
 RAG/
 ├── backend/
-│   ├── main.py                        # FastAPI entry point
+│   ├── main.py                        # FastAPI entry point & lifespan initialization
+│   ├── requirements.txt               # Python package dependencies
+│   ├── .env.example                   # Backend environment template
+│   ├── auth.db                        # SQLite database for user accounts
+│   ├── chroma_db/                     # Persistent ChromaDB vector index
+│   ├── uploads/                       # Document storage directory
+│   ├── auth/                          # Authentication Subsystem
+│   │   ├── database.py                # Async SQLite connection pool
+│   │   ├── dependencies.py            # FastAPI auth guards & cookie extraction
+│   │   ├── models.py                  # Pydantic auth schemas
+│   │   ├── router.py                  # Signup, Signin, Google OAuth endpoints
+│   │   └── utils.py                   # Bcrypt hashing & PyJWT token utilities
 │   ├── config/
-│   │   └── settings.py                # Pydantic Settings (.env)
-│   ├── routes/
-│   │   ├── upload.py                  # POST /upload
-│   │   ├── documents.py              # GET /documents, DELETE /documents/{id}
-│   │   └── chat.py                   # POST /chat, POST /chat/stream
-│   ├── services/
-│   │   ├── text_extractor.py          # LangChain document loaders
-│   │   ├── text_chunker.py            # LangChain text splitter
-│   │   ├── embedding_service.py       # HuggingFace embeddings (singleton)
-│   │   ├── vector_store.py            # ChromaDB wrapper
-│   │   ├── document_processor.py      # Extract → Chunk → Store pipeline
-│   │   ├── chat_service.py            # RAG + Groq + Memory + Streaming
-│   │   └── deps.py                    # Dependency injection
+│   │   └── settings.py                # Pydantic Settings (.env configuration)
 │   ├── models/
-│   │   └── schemas.py                 # Pydantic request/response models
-│   ├── requirements.txt
-│   └── .env.example
+│   │   └── schemas.py                 # Request/Response schemas (Upload, Docs, Chat)
+│   ├── routes/
+│   │   ├── chat.py                    # POST /chat and POST /chat/stream (SSE)
+│   │   ├── documents.py               # GET /documents, DELETE /documents/{id}
+│   │   └── upload.py                  # POST /upload multi-file ingestion
+│   └── services/
+│       ├── chat_service.py            # RAG prompt generation, memory, & Groq client
+│       ├── citation_service.py        # Precision citation filtering & alignment
+│       ├── deps.py                    # Singleton dependency providers
+│       ├── document_metadata.py       # Document status & metadata JSON registry
+│       ├── document_processor.py      # Extract → Chunk → VectorStore orchestrator
+│       ├── embedding_service.py       # HuggingFace all-MiniLM-L6-v2 singleton
+│       ├── text_chunker.py            # RecursiveCharacterTextSplitter wrapper
+│       ├── text_extractor.py          # PyPDFLoader, Docx2txtLoader, TextLoader
+│       └── vector_store.py            # ChromaDB interface
 ├── frontend/
-│   ├── index.html
-│   ├── vite.config.js
-│   ├── package.json
+│   ├── index.html                     # HTML5 entrypoint
+│   ├── vite.config.js                 # Vite bundler configuration
+│   ├── package.json                   # NPM dependencies & scripts
+│   ├── .env                           # Frontend environment configuration
 │   └── src/
-│       ├── main.jsx
-│       ├── App.jsx / App.css
-│       ├── index.css                  # Design system
+│       ├── main.jsx                   # React root mount
+│       ├── App.jsx                    # Route switch & provider tree
+│       ├── index.css                  # Global tokens, themes, & utility classes
 │       ├── api/
-│       │   └── client.js              # API fetch wrappers
+│       │   └── client.js              # Fetch client with credentials: 'include'
+│       ├── contexts/
+│       │   ├── AuthContext.jsx        # Auth state, session check, & sign-in methods
+│       │   └── ThemeContext.jsx       # Dark/Light mode theme state
+│       ├── pages/
+│       │   ├── LandingPage.jsx        # Product landing page with live interactive demo
+│       │   ├── LoginPage.jsx          # Login form + Google SSO
+│       │   ├── SignupPage.jsx         # Registration form + Google SSO
+│       │   └── ChatApp.jsx            # Main protected chat workspace
 │       └── components/
-│           ├── Sidebar.jsx / .css
-│           ├── FileUpload.jsx / .css
-│           ├── ChatPanel.jsx / .css
-│           ├── MessageBubble.jsx / .css
-│           └── SourceCitations.jsx / .css
-└── README.md
+│           ├── ProtectedRoute.jsx     # Route authentication guard
+│           ├── Sidebar.jsx            # Document list, storage stats, user card
+│           ├── FileUpload.jsx         # Drag-and-drop file upload zone
+│           ├── ChatPanel.jsx          # Conversation feed & prompt input
+│           ├── MessageBubble.jsx      # Markdown message display & copy buttons
+│           ├── SourceCitations.jsx    # Grounded citation cards with excerpts
+│           ├── GoogleSignInButton.jsx # Google One-Tap & OAuth redirect button
+│           ├── MarkdownRenderer.jsx   # Syntax-highlighted code & tables
+│           └── ThemeToggle.jsx        # Sun/moon dark mode toggle
+├── DOCUMENTATION.md                   # Full system design and architecture reference
+└── README.md                          # Quick start guide
 ```
 
-## Installation
+---
 
-### Prerequisites
+## ⚡ Quick Start
+
+### 1. Prerequisites
 
 - **Python 3.10+**
-- **Node.js 18+** and npm
-- A free **Groq API key** → [https://console.groq.com/keys](https://console.groq.com/keys)
+- **Node.js 18+** & npm
+- **Groq API Key:** Free account at [console.groq.com](https://console.groq.com)
 
-### 1. Backend Setup
+---
+
+### 2. Backend Setup
 
 ```bash
 cd backend
 
-# Create virtual environment
+# 1. Create and activate virtual environment
 python -m venv venv
 
-# Activate it
 # Windows:
-venv\Scripts\activate
-# macOS/Linux:
-source venv/bin/activate
+.\venv\Scripts\Activate.ps1
+# macOS / Linux:
+# source venv/bin/activate
 
-# Install dependencies
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# Create .env from template
-copy .env.example .env        # Windows
-# cp .env.example .env        # macOS/Linux
+# 3. Configure environment
+copy .env.example .env
 
-# Edit .env and add your Groq API key
+# Edit .env and enter your Groq API Key:
+# GROQ_API_KEY=gsk_your_key_here
+
+# 4. Start the backend server
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-> **Note:** On the first run, the embedding model (~90 MB) will be
-> downloaded and cached automatically by sentence-transformers.
+> **First Run Note:** On initial boot, the backend automatically downloads the `all-MiniLM-L6-v2` embedding model (~90 MB) into `~/.cache/huggingface`. Please allow 30–60 seconds for completion. Subsequent boots take under 1 second.
 
-### 2. Frontend Setup
+The API runs at **`http://localhost:8000`**.  
+Interactive Swagger docs: **`http://localhost:8000/docs`**.
+
+---
+
+### 3. Frontend Setup
+
+In a separate terminal:
 
 ```bash
 cd frontend
+
+# 1. Install Node dependencies
 npm install
-```
 
-## Environment Variables
-
-| Variable           | Required | Default                      | Description |
-|--------------------|----------|------------------------------|-------------|
-| `GROQ_API_KEY`     | **Yes**  | —                            | Groq API key for LLM |
-| `GROQ_MODEL`       | No       | `llama-3.3-70b-versatile`    | Groq model name |
-| `EMBEDDING_MODEL`  | No       | `all-MiniLM-L6-v2`           | HuggingFace embedding model |
-| `CHROMA_PERSIST_DIR` | No     | `./chroma_db`                | ChromaDB storage path |
-| `UPLOAD_DIR`       | No       | `./uploads`                  | Upload file storage |
-| `MAX_FILE_SIZE_MB` | No       | `50`                         | Max upload size |
-| `CHUNK_SIZE`       | No       | `800`                        | Chunk size in characters |
-| `CHUNK_OVERLAP`    | No       | `200`                        | Overlap between chunks |
-| `TOP_K_RESULTS`    | No       | `5`                          | Number of chunks to retrieve |
-| `CORS_ORIGINS`     | No       | `http://localhost:5173,...`   | Allowed CORS origins |
-
-## Running the Application
-
-### Start Backend
-
-```bash
-cd backend
-uvicorn main:app --reload
-```
-
-The API will be available at **http://localhost:8000**.
-Interactive docs at **http://localhost:8000/docs**.
-
-### Start Frontend
-
-```bash
-cd frontend
+# 2. Start Vite development server
 npm run dev
 ```
 
-Open **http://localhost:5173** in your browser.
+Open **`http://localhost:5173`** in your browser.
 
-## How to Use
+---
 
-1. **Upload documents** — drag & drop or click the upload area in the sidebar
-2. **Wait for processing** — the spinner indicates documents are being indexed
-3. **Ask questions** — type your question in the chat input
-4. **View answers** — AI responses stream in real-time with source citations
-5. **Follow up** — ask follow-up questions; conversation memory is maintained
-6. **Manage documents** — delete documents from the sidebar; they're removed from the index
+## 🔑 Google OAuth Setup (Optional)
 
-## API Endpoints
+To enable "Continue with Google" sign-in:
 
-| Method | Path                      | Description |
-|--------|---------------------------|-------------|
-| GET    | `/`                       | Health check |
-| POST   | `/upload`                 | Upload & process documents |
-| GET    | `/documents`              | List all indexed documents |
-| DELETE | `/documents/{document_id}`| Delete a document |
-| POST   | `/chat`                   | Non-streaming RAG chat |
-| POST   | `/chat/stream`            | Streaming RAG chat (SSE) |
+1. Open [Google Cloud Console > Credentials](https://console.cloud.google.com/apis/credentials).
+2. Create an **OAuth 2.0 Client ID** (Application type: *Web application*).
+3. Add **Authorized JavaScript origins**:
+   - `http://localhost:5173`
+   - `http://localhost`
+   - `http://127.0.0.1:5173`
+4. Add **Authorized redirect URIs**:
+   - `http://localhost:8000/auth/google/callback`
+5. Copy your Client ID and Client Secret into `backend/.env`:
+   ```ini
+   GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
+   ```
+6. Copy the Client ID into `frontend/.env`:
+   ```ini
+   VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+   ```
 
-## RAG Pipeline
+---
 
-1. **Upload** → file is validated, saved to disk
-2. **Extract** → LangChain loader extracts text (page-aware for PDFs)
-3. **Chunk** → `RecursiveCharacterTextSplitter` creates ~800-char chunks with 200-char overlap
-4. **Embed** → `all-MiniLM-L6-v2` generates 384-dim embeddings locally
-5. **Store** → chunks + embeddings + metadata saved to ChromaDB
-6. **Query** → user question is embedded → cosine similarity search → top-5 chunks retrieved
-7. **Generate** → Groq LLM receives context + question + conversation history → streams answer
-8. **Cite** → source documents and page numbers are attached to the response
+## ⚙️ Environment Variables Summary
 
-## Known Limitations
+### Backend (`backend/.env`)
+| Variable | Required | Default | Purpose |
+| :--- | :---: | :--- | :--- |
+| `GROQ_API_KEY` | **Yes** | — | LLM inference via Groq |
+| `GROQ_MODEL` | No | `openai/gpt-oss-120b` | Groq model selection |
+| `EMBEDDING_MODEL`| No | `all-MiniLM-L6-v2` | Local HuggingFace embeddings |
+| `CHROMA_PERSIST_DIR` | No | `./chroma_db` | ChromaDB vector store directory |
+| `CHUNK_SIZE` | No | `800` | Target chunk character length |
+| `CHUNK_OVERLAP` | No | `200` | Overlap characters between chunks |
+| `RETRIEVAL_TOP_K` | No | `6` | Number of candidate chunks retrieved |
+| `SIMILARITY_THRESHOLD` | No | `0.20` | Cutoff similarity threshold for citations |
+| `JWT_SECRET_KEY` | **Yes** | *[secret]* | Key used to sign JWT auth cookies |
+| `GOOGLE_CLIENT_ID`| No | — | Google OAuth Client ID |
+| `GOOGLE_CLIENT_SECRET`| No | — | Google OAuth Client Secret |
 
-- **Embedding model** runs on CPU — large documents may take a few seconds to process
-- **Conversation memory** is in-memory only — restarting the backend clears chat history (but documents persist in ChromaDB)
-- **Groq free tier** has rate limits — if you hit them, wait ~60 seconds
-- **DOCX and TXT** files don't have page numbers — citations show filename only
-- **No authentication** — this is a single-user local application
-- **Images/tables in PDFs** are not extracted — only text content is indexed
+### Frontend (`frontend/.env`)
+| Variable | Required | Default | Purpose |
+| :--- | :---: | :--- | :--- |
+| `VITE_GOOGLE_CLIENT_ID` | No | — | Public Google Client ID for GIS button |
+
+---
+
+## 🧪 Testing
+
+Run the automated test suite from `backend/`:
+
+```powershell
+# Google OAuth & GIS Redirect Test
+python test_google_auth.py
+
+# User Registration & Auth Cookie Lifecycle
+python test_auth_integration.py
+
+# Precision Citation & Margin Filtering Test
+python test_citation_filter.py
+
+# End-to-End System Test
+python test_e2e.py
+```
+
+---
+
+## 📜 License
+
+Distributed under the MIT License. See `LICENSE` for more information.

@@ -24,6 +24,15 @@ export default function LoginPage() {
     }
   }, [user, navigate, location]);
 
+  // Capture OAuth redirect errors if any
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const err = searchParams.get('error');
+    if (err) {
+      setError(decodeURIComponent(err));
+    }
+  }, [location.search]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');

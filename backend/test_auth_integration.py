@@ -1,8 +1,10 @@
+import uuid
 import asyncio
 from httpx import AsyncClient, ASGITransport
 from main import app
 
 async def run_tests():
+    test_email = f"alex_{uuid.uuid4().hex[:8]}@test.com"
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         # 1. Health check
@@ -18,7 +20,7 @@ async def run_tests():
         # 3. Signup a test user
         signup_payload = {
             "name": "Alex Developer",
-            "email": "alex@test.com",
+            "email": test_email,
             "password": "Password123!"
         }
         res = await ac.post("/auth/signup", json=signup_payload)
@@ -30,7 +32,7 @@ async def run_tests():
         res = await ac.get("/auth/me")
         print("Authenticated /auth/me:", res.status_code, res.json())
         assert res.status_code == 200
-        assert res.json()["email"] == "alex@test.com"
+        assert res.json()["email"] == test_email
         assert res.json()["name"] == "Alex Developer"
 
         # 5. Sign out
@@ -45,7 +47,7 @@ async def run_tests():
 
         # 7. Sign in with valid credentials
         signin_payload = {
-            "email": "alex@test.com",
+            "email": test_email,
             "password": "Password123!"
         }
         res = await ac.post("/auth/signin", json=signin_payload)
@@ -55,7 +57,7 @@ async def run_tests():
 
         # 8. Sign in with invalid password -> 401
         bad_signin = {
-            "email": "alex@test.com",
+            "email": test_email,
             "password": "WrongPassword!"
         }
         res = await ac.post("/auth/signin", json=bad_signin)

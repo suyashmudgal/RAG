@@ -16,10 +16,10 @@ export default function GoogleSignInButton({
   const [error, setError] = useState('');
   const [showConfigModal, setShowConfigModal] = useState(false);
 
-  // Read Google Client ID strictly from environment variable, falling back to server config
+  // Read Google Client ID from backend server config, falling back to environment variable
   const googleClientId = (
-    import.meta.env.VITE_GOOGLE_CLIENT_ID ||
     authConfig?.google_client_id ||
+    import.meta.env.VITE_GOOGLE_CLIENT_ID ||
     ''
   ).trim();
 
@@ -95,32 +95,30 @@ export default function GoogleSignInButton({
   const handleClick = () => {
     setError('');
 
-    // If Google Client ID is configured, trigger Google Identity prompt
+    // If Google Client ID is configured, trigger Google Identity prompt or OAuth redirect
     if (googleClientId) {
       if (window.google?.accounts?.id) {
-        // Trigger One Tap prompt first
-        window.google.accounts.id.prompt((notification) => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            // Fallback: click pre-rendered button if One-Tap prompt is suppressed
-            const gsiBtn = hiddenGsiRef.current?.querySelector('div[role="button"]');
-            if (gsiBtn) {
-              gsiBtn.click();
-            } else if (hiddenGsiRef.current) {
-              window.google.accounts.id.renderButton(hiddenGsiRef.current, {
-                type: 'standard',
-                theme: 'outline',
-                size: 'large',
-              });
-              const newlyRendered = hiddenGsiRef.current.querySelector('div[role="button"]');
-              if (newlyRendered) newlyRendered.click();
+        try {
+          // Trigger One Tap prompt; if not displayed or skipped, redirect via OAuth flow
+          window.google.accounts.id.prompt((notification) => {
+            if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+              console.info('Google One-Tap not displayed, falling back to OAuth redirect...');
+              window.location.href = 'http://localhost:8000/auth/google/login';
             }
-          }
-        });
-        return;
+          });
+          return;
+        } catch (err) {
+          console.warn('Google One-Tap error, falling back to OAuth redirect:', err);
+          window.location.href = 'http://localhost:8000/auth/google/login';
+          return;
+        }
       }
+      // Fallback: If Google Identity Services script is blocked or not loaded, use backend redirect flow
+      window.location.href = 'http://localhost:8000/auth/google/login';
+      return;
     }
 
-    // If client ID is missing or script didn't load, show configuration guidance modal
+    // If client ID is missing, show configuration guidance modal
     setShowConfigModal(true);
   };
 
