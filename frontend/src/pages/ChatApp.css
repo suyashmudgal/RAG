@@ -206,3 +206,28 @@
     display: none;
   }
 }
+
+
+.user-profile-clickable {
+  cursor: pointer;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  transition: all var(--transition);
+}
+
+.user-profile-clickable:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-border);
+  transform: translateY(-1px);
+}
+
+.user-settings-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+.user-profile-clickable:hover .user-settings-icon {
+  color: var(--accent);
+}

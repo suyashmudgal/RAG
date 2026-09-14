@@ -1,16 +1,16 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import MessageBubble from './MessageBubble';
-import { streamMessage } from '../api/client';
+import { streamMessage, getConversation } from '../api/client';
 import './ChatPanel.css';
 
 const STARTER_PROMPTS = [
   {
-    icon: '📑',
+    icon: '💡',
     title: 'Summarize Key Takeaways',
     prompt: 'Can you summarize the most important findings and takeaways across the uploaded documents?',
   },
   {
-    icon: '🔍',
+    icon: '📋',
     title: 'Extract Policies & Rules',
     prompt: 'What are the main requirements, rules, and policy constraints outlined in these files?',
   },
@@ -20,19 +20,55 @@ const STARTER_PROMPTS = [
     prompt: 'Extract all relevant metrics, figures, statistics, and financial projections mentioned.',
   },
   {
-    icon: '⚡',
+    icon: '🚀',
     title: 'Actionable Next Steps',
     prompt: 'What are the recommended next steps, action items, and implementation milestones?',
   },
 ];
 
-export default function ChatPanel() {
-  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
+export default function ChatPanel({
+  activeConversationId = null,
+  activeConversationTitle = '',
+  onConversationCreated,
+  onNewChat,
+}) {
   const [messages, setMessages] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+
+  /* Load conversation messages when activeConversationId changes */
+  useEffect(() => {
+    let mounted = true;
+    if (!activeConversationId) {
+      setMessages([]);
+      return;
+    }
+
+    setLoadingHistory(true);
+    getConversation(activeConversationId)
+      .then((data) => {
+        if (!mounted) return;
+        const loaded = (data.messages || []).map((m) => ({
+          role: m.role,
+          content: m.content,
+          created_at: m.created_at,
+        }));
+        setMessages(loaded);
+      })
+      .catch((err) => {
+        console.error('Failed to load conversation history:', err);
+      })
+      .finally(() => {
+        if (mounted) setLoadingHistory(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [activeConversationId]);
 
   /* auto-scroll to latest message */
   useEffect(() => {
@@ -52,39 +88,23 @@ export default function ChatPanel() {
     textarea.style.height = `${newHeight}px`;
   };
 
-  /* ── new chat ───────────────────────────────────────────────────────── */
-
-  const handleNewChat = () => {
-    setSessionId(crypto.randomUUID());
-    setMessages([]);
-    setInput('');
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto';
-      inputRef.current.focus();
-    }
-  };
-
-  /* ── send message ───────────────────────────────────────────────────── */
-
+  /* Send message */
   const handleSend = useCallback(
-    async (customText) => {
-      const question = (customText || input).trim();
+    async (textToSend) => {
+      const question = (textToSend || input).trim();
       if (!question || isStreaming) return;
 
       setInput('');
       if (inputRef.current) {
         inputRef.current.style.height = 'auto';
       }
+
+      // Optimistically append user message & empty assistant placeholder
+      const userMsg = { role: 'user', content: question };
+      const assistantMsg = { role: 'assistant', content: '', isStreaming: true, sources: [] };
+
+      setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
-
-      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      // Append user + placeholder AI message
-      setMessages((prev) => [
-        ...prev,
-        { role: 'user', content: question, timestamp },
-        { role: 'assistant', content: '', sources: [], isStreaming: true, timestamp },
-      ]);
 
       let tokenBuffer = '';
       let rafId = null;
@@ -105,7 +125,7 @@ export default function ChatPanel() {
 
       await streamMessage(
         question,
-        sessionId,
+        activeConversationId,
         /* onToken */
         (token) => {
           tokenBuffer += token;
@@ -145,7 +165,7 @@ export default function ChatPanel() {
           setIsStreaming(false);
         },
         /* onDone */
-        () => {
+        (resolvedConvId) => {
           if (rafId) {
             cancelAnimationFrame(rafId);
             flushTokens();
@@ -158,13 +178,15 @@ export default function ChatPanel() {
             return copy;
           });
           setIsStreaming(false);
+
+          if (resolvedConvId && onConversationCreated) {
+            onConversationCreated(resolvedConvId);
+          }
         }
       );
     },
-    [input, isStreaming, sessionId]
+    [input, isStreaming, activeConversationId, onConversationCreated]
   );
-
-  /* ── keyboard shortcut ──────────────────────────────────────────────── */
 
   const onKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -186,25 +208,29 @@ export default function ChatPanel() {
     }
   };
 
-  /* ── render ─────────────────────────────────────────────────────────── */
-
   return (
     <main className="chat-panel">
       {/* Header */}
       <div className="chat-header">
         <div className="chat-header-title">
-          <h2 className="chat-title-text">Grounded Assistant</h2>
-          <span className="session-id-pill" title="Unique session conversation thread">
-            Session: {sessionId.slice(0, 8)}
-          </span>
+          <h2 className="chat-title-text">
+            {activeConversationTitle || 'Grounded Assistant'}
+          </h2>
+          {activeConversationId ? (
+            <span className="session-id-pill" title={`Conversation ID: ${activeConversationId}`}>
+              Thread: {activeConversationId.slice(0, 8)}
+            </span>
+          ) : (
+            <span className="session-id-pill new-pill">New Thread</span>
+          )}
         </div>
 
         <div className="chat-header-actions">
           <button
             type="button"
             className="new-chat-btn"
-            onClick={handleNewChat}
-            title="Clear active thread and start new session"
+            onClick={onNewChat}
+            title="Start new conversation"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" />
@@ -218,7 +244,12 @@ export default function ChatPanel() {
       {/* Messages */}
       <div className="messages-scroll-area">
         <div className="messages-centered-column">
-          {messages.length === 0 ? (
+          {loadingHistory ? (
+            <div className="loading-state" style={{ paddingTop: '80px' }}>
+              <div className="spinner" />
+              <span>Loading messages…</span>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="chat-welcome-state">
               <div className="welcome-avatar-aura">
                 <div className="welcome-avatar-icon">
@@ -301,8 +332,8 @@ export default function ChatPanel() {
           </div>
 
           <div className="chat-input-footer">
-            <span className="input-hint">Press <strong>Enter</strong> to send · <strong>Shift + Enter</strong> for new line</span>
-            <span className="input-guarantee">Backed by ChromaDB vector similarity</span>
+            <span className="input-hint">Press <strong>Enter</strong> to send • <strong>Shift + Enter</strong> for new line</span>
+            <span className="input-guarantee">Backed by ChromaDB & PostgreSQL</span>
           </div>
         </div>
       </div>

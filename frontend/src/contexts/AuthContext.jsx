@@ -59,6 +59,11 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  // Update user in local state without full reload
+  const updateUser = (partialOrFullUser) => {
+    setUser((prev) => (prev ? { ...prev, ...partialOrFullUser } : partialOrFullUser));
+  };
+
   // Sign out
   const logout = async () => {
     try {
@@ -81,6 +86,7 @@ export function AuthProvider({ children }) {
         loginWithGoogle,
         logout,
         checkAuth,
+        updateUser,
       }}
     >
       {children}

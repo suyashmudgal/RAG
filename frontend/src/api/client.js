@@ -89,7 +89,6 @@ export async function apiGetAuthConfig() {
   }
 }
 
-
 /* ── Upload ─────────────────────────────────────────────────────────────── */
 
 export async function uploadFiles(files) {
@@ -133,14 +132,59 @@ export async function deleteDocument(documentId) {
   return res.json();
 }
 
-/* ── Chat (non-streaming) ───────────────────────────────────────────────── */
+/* ── Conversations (Persistent Chat History) ────────────────────────────── */
 
-export async function sendMessage(question, sessionId) {
+export async function getConversations() {
+  const res = await fetch(`${API_BASE}/conversations`, {
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Failed to fetch conversations');
+  return res.json();
+}
+
+export async function createConversation(title = 'New Conversation') {
+  const res = await fetch(`${API_BASE}/conversations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) throw new Error('Failed to create conversation');
+  return res.json();
+}
+
+export async function getConversation(conversationId) {
+  const res = await fetch(`${API_BASE}/conversations/${conversationId}`, {
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Failed to fetch conversation');
+  return res.json();
+}
+
+export async function deleteConversation(conversationId) {
+  const res = await fetch(`${API_BASE}/conversations/${conversationId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Delete failed' }));
+    throw new Error(err.detail || 'Delete failed');
+  }
+  return res.json();
+}
+
+/* ── Chat (non-streaming) ────────────────────────────────────────────────── */
+
+export async function sendMessage(question, conversationId) {
   const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ question, session_id: sessionId }),
+    body: JSON.stringify({
+      question,
+      conversation_id: conversationId || undefined,
+      session_id: conversationId || undefined,
+    }),
   });
 
   if (!res.ok) {
@@ -150,17 +194,22 @@ export async function sendMessage(question, sessionId) {
   return res.json();
 }
 
-/* ── Chat (streaming SSE via fetch) ─────────────────────────────────────── */
+/* ── Chat (streaming SSE via fetch) ──────────────────────────────────────── */
 
-export async function streamMessage(question, sessionId, onToken, onSources, onError, onDone) {
+export async function streamMessage(question, conversationId, onToken, onSources, onError, onDone) {
   let finished = false;
+  let resolvedConvId = conversationId;
 
   try {
     const res = await fetch(`${API_BASE}/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ question, session_id: sessionId }),
+      body: JSON.stringify({
+        question,
+        conversation_id: conversationId || undefined,
+        session_id: conversationId || undefined,
+      }),
     });
 
     if (!res.ok) {
@@ -197,7 +246,8 @@ export async function streamMessage(question, sessionId, onToken, onSources, onE
               break;
             case 'done':
               finished = true;
-              onDone();
+              resolvedConvId = data.conversation_id || resolvedConvId;
+              onDone(resolvedConvId);
               break;
           }
         } catch {
@@ -206,8 +256,44 @@ export async function streamMessage(question, sessionId, onToken, onSources, onE
       }
     }
 
-    if (!finished) onDone();
+    if (!finished) onDone(resolvedConvId);
   } catch (error) {
     onError(error.message || 'Connection error');
   }
+}
+
+
+/* ── Profile & Password Settings ────────────────────────────────────────── */
+
+export async function updateProfile(data) {
+  const res = await fetch(`${API_BASE}/auth/me`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to update profile' }));
+    throw new Error(err.detail || 'Failed to update profile');
+  }
+  return res.json();
+}
+
+export async function changePassword(currentPassword, newPassword) {
+  const res = await fetch(`${API_BASE}/auth/change-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to change password' }));
+    throw new Error(err.detail || 'Failed to change password');
+  }
+  return res.json();
 }
