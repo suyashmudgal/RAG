@@ -5,21 +5,20 @@ import './FileUpload.css';
 const ALLOWED_EXTS = ['.pdf', '.docx', '.txt'];
 const MAX_SIZE_MB = 50;
 
-export default function FileUpload({ onUploadComplete }) {
+export default function FileUpload({ onUploadComplete, onFilesQueued }) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState(null);
   const inputRef = useRef(null);
 
   /* ── validation ─────────────────────────────────────────────────────── */
-
   const validate = (files) => {
     const valid = [];
     const errors = [];
     for (const f of files) {
       const ext = '.' + f.name.split('.').pop()?.toLowerCase();
       if (!ALLOWED_EXTS.includes(ext)) {
-        errors.push(`${f.name}: unsupported format`);
+        errors.push(`${f.name}: unsupported format (only PDF, DOCX, TXT allowed)`);
       } else if (f.size > MAX_SIZE_MB * 1024 * 1024) {
         errors.push(`${f.name}: exceeds ${MAX_SIZE_MB} MB limit`);
       } else {
@@ -30,7 +29,6 @@ export default function FileUpload({ onUploadComplete }) {
   };
 
   /* ── upload handler ─────────────────────────────────────────────────── */
-
   const handleUpload = useCallback(
     async (fileList) => {
       const { valid, errors } = validate(fileList);
@@ -42,16 +40,26 @@ export default function FileUpload({ onUploadComplete }) {
       if (!valid.length) return;
 
       setUploading(true);
-      setStatus({ type: 'uploading', msgs: [`Processing ${valid.length} file(s)…`] });
+      setStatus({ type: 'uploading', msgs: [`Uploading ${valid.length} file(s) to server…`] });
 
       try {
         const data = await uploadFiles(valid);
         const results = data.results || [];
-        const ok = results.filter((r) => r.status !== 'error');
+        const ok = results.filter((r) => r.status !== 'error' && (r.document_id || r.id));
         const fail = results.filter((r) => r.status === 'error');
 
+        // Immediately notify parent with the queued document jobs
+        if (ok.length > 0) {
+          if (onFilesQueued) {
+            onFilesQueued(ok);
+          }
+          if (onUploadComplete) {
+            onUploadComplete();
+          }
+        }
+
         const msgs = [
-          ...(ok.length ? [`Successfully indexed ${ok.length} file(s)`] : []),
+          ...(ok.length ? [`Started processing ${ok.length} file(s) in background`] : []),
           ...fail.map((f) => `${f.filename}: ${f.message}`),
           ...errors.map((e) => `Warning: ${e}`),
         ];
@@ -60,20 +68,17 @@ export default function FileUpload({ onUploadComplete }) {
           type: fail.length && !ok.length ? 'error' : 'success',
           msgs,
         });
-
-        if (ok.length) onUploadComplete?.();
       } catch (err) {
-        setStatus({ type: 'error', msgs: [err.message] });
+        setStatus({ type: 'error', msgs: [err.message || 'Upload failed'] });
       } finally {
         setUploading(false);
         if (inputRef.current) inputRef.current.value = '';
       }
     },
-    [onUploadComplete]
+    [onUploadComplete, onFilesQueued]
   );
 
   /* ── drag handlers ──────────────────────────────────────────────────── */
-
   const onDragOver = (e) => {
     e.preventDefault();
     setIsDragging(true);
@@ -88,8 +93,6 @@ export default function FileUpload({ onUploadComplete }) {
     if (e.dataTransfer.files.length) handleUpload(Array.from(e.dataTransfer.files));
   };
 
-  /* ── render ─────────────────────────────────────────────────────────── */
-
   return (
     <div className="file-upload">
       <div
@@ -98,14 +101,20 @@ export default function FileUpload({ onUploadComplete }) {
         onDragLeave={onDragLeave}
         onDrop={onDrop}
         onClick={() => !uploading && inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if ((e.key === 'Enter' || e.key === ' ') && !uploading) {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
         role="button"
         tabIndex={0}
-        aria-label="Upload files"
+        aria-label="Upload PDF, DOCX, or TXT documents"
       >
         {uploading ? (
           <div className="uploading-state">
             <div className="spinner" />
-            <span className="uploading-text">Indexing into ChromaDB…</span>
+            <span className="uploading-text">Uploading to server…</span>
           </div>
         ) : (
           <div className="drop-zone-content">
@@ -117,7 +126,7 @@ export default function FileUpload({ onUploadComplete }) {
               </svg>
             </div>
             <span className="upload-primary-text">Click to upload or drag &amp; drop</span>
-            <span className="upload-sub-text">PDF, DOCX, TXT · Max {MAX_SIZE_MB}MB</span>
+            <span className="upload-sub-text">PDF, DOCX, TXT · Up to {MAX_SIZE_MB}MB per file</span>
           </div>
         )}
       </div>
@@ -129,6 +138,7 @@ export default function FileUpload({ onUploadComplete }) {
         accept=".pdf,.docx,.txt"
         onChange={(e) => handleUpload(Array.from(e.target.files || []))}
         style={{ display: 'none' }}
+        aria-hidden="true"
       />
 
       {status && (

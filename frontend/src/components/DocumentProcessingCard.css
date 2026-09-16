@@ -1,0 +1,306 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   DocChat AI — Document Processing Stepper Card
+   Real-Time Visual Pipeline Experience
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.doc-processing-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition);
+  animation: procCardEnter 0.25s ease-out;
+}
+
+@keyframes procCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.doc-processing-card:hover {
+  border-color: var(--accent-border);
+}
+
+.doc-processing-card.is-completed {
+  border-color: var(--success-border);
+  background: linear-gradient(180deg, var(--bg-surface) 0%, var(--success-bg) 100%);
+}
+
+.doc-processing-card.is-failed {
+  border-color: var(--error-border);
+  background: linear-gradient(180deg, var(--bg-surface) 0%, var(--error-bg) 100%);
+}
+
+/* Header */
+.proc-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.proc-file-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.proc-ext-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: var(--radius-xs);
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.proc-filename {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.proc-dismiss-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-xs);
+  font-size: 0.85rem;
+  line-height: 1;
+  transition: color var(--transition), background var(--transition);
+}
+
+.proc-dismiss-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+/* Stepper List */
+.proc-stepper-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding-left: 2px;
+}
+
+.proc-step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  transition: color var(--transition);
+}
+
+.proc-step-bullet {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Done Stage */
+.proc-step-item.done {
+  color: var(--text-secondary);
+}
+
+.proc-step-item.done .proc-step-bullet {
+  color: var(--success);
+}
+
+/* Active Stage */
+.proc-step-item.active {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.proc-active-dot {
+  width: 9px;
+  height: 9px;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--accent-glow);
+  animation: procPulse 1.2s infinite ease-in-out;
+}
+
+@keyframes procPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.7;
+  }
+}
+
+/* Future Stage */
+.proc-step-item.future {
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
+.proc-future-circle {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--text-muted);
+  border-radius: 50%;
+}
+
+.proc-step-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Progress Track */
+.proc-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.proc-progress-track {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.proc-progress-fill {
+  height: 100%;
+  background: var(--accent-gradient);
+  border-radius: var(--radius-full);
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.proc-percentage {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent-text);
+  font-variant-numeric: tabular-nums;
+  min-width: 34px;
+  text-align: right;
+}
+
+/* Footer Meta */
+.proc-meta-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  gap: 8px;
+}
+
+.proc-chunks-info {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.proc-status-msg {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+/* Success Banner */
+.proc-completed-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 4px;
+}
+
+.proc-completed-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--success-bg);
+  color: var(--success);
+  border: 1px solid var(--success-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.proc-completed-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.proc-completed-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--success);
+}
+
+.proc-completed-chunks {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+/* Error Banner */
+.proc-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 6px 2px;
+}
+
+.proc-error-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--error-bg);
+  color: var(--error);
+  border: 1px solid var(--error-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.proc-error-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.proc-error-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--error);
+}
+
+.proc-error-msg {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  word-break: break-word;
+}

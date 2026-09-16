@@ -120,6 +120,38 @@ export async function getDocuments() {
   return res.json();
 }
 
+export async function getDocumentStatus(documentId) {
+  const res = await fetch(`${API_BASE}/documents/${documentId}/status`, {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch status' }));
+    throw new Error(err.detail || 'Failed to fetch document status');
+  }
+  return res.json();
+}
+
+export async function downloadDocumentFile(documentId, filename) {
+  const res = await fetch(`${API_BASE}/documents/${documentId}/download`, {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Download failed' }));
+    throw new Error(err.detail || 'Failed to download document');
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename || `document_${documentId}`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    window.URL.revokeObjectURL(url);
+    if (a.parentNode) a.parentNode.removeChild(a);
+  }, 100);
+}
+
 export async function deleteDocument(documentId) {
   const res = await fetch(`${API_BASE}/documents/${documentId}`, {
     method: 'DELETE',
