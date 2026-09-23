@@ -493,6 +493,147 @@
   background: var(--bg-surface);
 }
 
+/* Knowledge Base Control (Lower Sidebar) */
+.sidebar-kb-control-container {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.sidebar-kb-control-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: left;
+}
+
+.sidebar-kb-control-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-light);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.sidebar-kb-control-btn.active {
+  background: var(--accent-dim);
+  border-color: var(--accent-border);
+}
+
+.sidebar-kb-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-kb-icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+
+.sidebar-kb-control-btn:hover .sidebar-kb-icon-wrap,
+.sidebar-kb-control-btn.active .sidebar-kb-icon-wrap {
+  background: var(--accent-gradient);
+  color: #ffffff;
+}
+
+.sidebar-kb-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-kb-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.sidebar-kb-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sidebar-kb-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sidebar-kb-dot.ready {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+.sidebar-kb-dot.processing {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+  animation: kbDotPulse 1.4s ease-in-out infinite;
+}
+
+.sidebar-kb-dot.empty {
+  background: var(--text-muted);
+  opacity: 0.6;
+}
+
+@keyframes kbDotPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.75);
+    opacity: 0.4;
+  }
+}
+
+.sidebar-kb-text {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-kb-arrow {
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform var(--transition), color var(--transition);
+}
+
+.sidebar-kb-control-btn:hover .sidebar-kb-arrow,
+.sidebar-kb-control-btn.active .sidebar-kb-arrow {
+  color: var(--accent-text);
+  transform: translateX(2px);
+}
+
 /* Footer & Account Card */
 .sidebar-footer-account {
   padding: 12px 14px;

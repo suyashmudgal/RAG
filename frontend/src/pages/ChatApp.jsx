@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import ChatPanel from '../components/ChatPanel';
@@ -347,6 +347,28 @@ export default function ChatApp() {
 
   const activeConv = conversations.find((c) => c.id === activeConversationId);
 
+  const activeProcessingCount = useMemo(() => {
+    return Object.values(processingDocs).filter(
+      (d) => d.processing_stage !== 'COMPLETED' && d.processing_stage !== 'FAILED'
+    ).length;
+  }, [processingDocs]);
+
+  // Compute strictly completed/indexed documents (excluding documents currently processing or failed)
+  const indexedDocCount = useMemo(() => {
+    return documents.filter((d) => {
+      const activeJob = processingDocs[d.document_id];
+      if (activeJob) {
+        const stage = (activeJob.processing_stage || activeJob.status || '').toUpperCase();
+        if (stage !== 'COMPLETED' && stage !== 'PROCESSED') {
+          return false;
+        }
+      }
+      const docStage = (d.processing_stage || d.status || '').toUpperCase();
+      if (docStage === 'FAILED' || docStage === 'ERROR') return false;
+      return docStage === 'COMPLETED' || docStage === 'PROCESSED' || docStage === 'INDEXED' || (!docStage && !d.error);
+    }).length;
+  }, [documents, processingDocs]);
+
   return (
     <div className="app-container">
       {/* 3-Column Modern AI Workspace */}
@@ -365,6 +387,10 @@ export default function ChatApp() {
           loadingConversations={loadingConversations}
           onOpenSettings={() => setSettingsOpen(true)}
           onSignOut={handleSignOut}
+          onToggleDocPanel={() => setDocPanelOpen((prev) => !prev)}
+          docPanelOpen={docPanelOpen}
+          documentCount={indexedDocCount}
+          processingCount={activeProcessingCount}
         />
 
         {/* Center: AI Chat Workspace Canvas */}
@@ -376,7 +402,7 @@ export default function ChatApp() {
           onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
           onToggleDocPanel={() => setDocPanelOpen((prev) => !prev)}
           docPanelOpen={docPanelOpen}
-          indexedDocCount={documents.length}
+          indexedDocCount={indexedDocCount}
           onOpenUpload={() => setDocPanelOpen(true)}
         />
 

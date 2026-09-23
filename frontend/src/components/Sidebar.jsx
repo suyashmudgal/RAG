@@ -16,6 +16,10 @@ export default function Sidebar({
   loadingConversations = false,
   onOpenSettings,
   onSignOut,
+  onToggleDocPanel,
+  docPanelOpen = false,
+  documentCount = 0,
+  processingCount = 0,
 }) {
   const { user } = useAuth();
 
@@ -85,6 +89,23 @@ export default function Sidebar({
   const recentList = useMemo(() => {
     return filteredConversations.filter((c) => !c.is_pinned);
   }, [filteredConversations]);
+
+  // Knowledge Base dynamic status label
+  const kbStatusText = useMemo(() => {
+    if (processingCount > 0) {
+      if (documentCount > 0) {
+        return `${documentCount} indexed • ${processingCount} processing`;
+      }
+      return `${processingCount} document${processingCount === 1 ? '' : 's'} processing`;
+    }
+    if (documentCount === 0) {
+      return '0 documents';
+    }
+    if (documentCount === 1) {
+      return '1 document indexed';
+    }
+    return `${documentCount} documents indexed`;
+  }, [documentCount, processingCount]);
 
   // Relative timestamp formatting
   const formatTime = (isoString) => {
@@ -447,6 +468,40 @@ export default function Sidebar({
               </div>
             </>
           )}
+        </div>
+
+        {/* Knowledge Base Control (lower portion) */}
+        <div className="sidebar-kb-control-container">
+          <button
+            type="button"
+            className={`sidebar-kb-control-btn ${docPanelOpen ? 'active' : ''}`}
+            onClick={() => {
+              if (onToggleDocPanel) onToggleDocPanel();
+            }}
+            title={docPanelOpen ? 'Close Knowledge Base panel' : 'Open Knowledge Base panel'}
+            aria-label="Toggle Knowledge Base panel"
+          >
+            <div className="sidebar-kb-left">
+              <div className="sidebar-kb-icon-wrap">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                </svg>
+              </div>
+              <div className="sidebar-kb-meta">
+                <span className="sidebar-kb-title">Knowledge Base</span>
+                <div className="sidebar-kb-status">
+                  <span className={`sidebar-kb-dot ${processingCount > 0 ? 'processing' : documentCount > 0 ? 'ready' : 'empty'}`} />
+                  <span className="sidebar-kb-text">{kbStatusText}</span>
+                </div>
+              </div>
+            </div>
+            <div className="sidebar-kb-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </div>
+          </button>
         </div>
 
         {/* User Account & Footer Controls */}

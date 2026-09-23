@@ -4,60 +4,6 @@ import MessageBubble from './MessageBubble';
 import { streamMessage, getConversation, exportConversationPdf, renameConversation } from '../api/client';
 import './ChatPanel.css';
 
-const DEFAULT_SUGGESTIONS_WITH_DOCS = [
-  {
-    icon: '📄',
-    title: 'Summarize key findings',
-    desc: 'Extract main takeaways, themes, and conclusions',
-    prompt: 'Can you provide a comprehensive summary of the key findings, conclusions, and takeaways from the uploaded documents?',
-  },
-  {
-    icon: '💡',
-    title: 'Explain complex concepts',
-    desc: 'Break down intricate sections in plain language',
-    prompt: 'Explain the core methodologies and most intricate concepts in these documents using clear, beginner-friendly terms.',
-  },
-  {
-    icon: '🎯',
-    title: 'Identify requirements & facts',
-    desc: 'Locate policies, rules, conditions, and constraints',
-    prompt: 'What are the critical requirements, constraints, policies, and conditions explicitly stated across the documents?',
-  },
-  {
-    icon: '📊',
-    title: 'Extract metrics & numbers',
-    desc: 'Isolate statistics, figures, percentages, and data',
-    prompt: 'Extract all quantifiable metrics, statistics, percentages, and numerical facts presented in the documents with citations.',
-  },
-];
-
-const DEFAULT_SUGGESTIONS_NO_DOCS = [
-  {
-    icon: '🚀',
-    title: 'Upload research or notes',
-    desc: 'Ground AI in research papers, reports, or contracts',
-    prompt: 'How do verifiable citations work when I query my uploaded documents?',
-  },
-  {
-    icon: '📑',
-    title: 'Multi-document synthesis',
-    desc: 'Compare facts across multiple PDF, DOCX, or TXT files',
-    prompt: 'How does DocChat AI prevent hallucinations using ChromaDB vector search?',
-  },
-  {
-    icon: '🔍',
-    title: 'Page-level citation precision',
-    desc: 'Inspect exact source quotes, page numbers, and similarity',
-    prompt: 'What document formats are supported and how are pages chunked?',
-  },
-  {
-    icon: '⚡',
-    title: 'Instant local embeddings',
-    desc: 'Fast semantic retrieval without external API costs',
-    prompt: 'Explain the end-to-end RAG ingestion pipeline from upload to vector index.',
-  },
-];
-
 export default function ChatPanel({
   activeConversationId = null,
   activeConversationTitle = '',
@@ -344,10 +290,6 @@ export default function ChatPanel({
     }
   };
 
-  const suggestions = indexedDocCount > 0
-    ? DEFAULT_SUGGESTIONS_WITH_DOCS
-    : DEFAULT_SUGGESTIONS_NO_DOCS;
-
   return (
     <main className="chat-panel" role="main">
       {/* ── Top Header ── */}
@@ -414,20 +356,6 @@ export default function ChatPanel({
         </div>
 
         <div className="chat-header-right">
-          {/* Grounding / Knowledge Status Badge */}
-          <button
-            type="button"
-            className={`rag-grounding-badge ${docPanelOpen ? 'active' : ''}`}
-            onClick={onToggleDocPanel}
-            title="Toggle Document Knowledge Base"
-            aria-label="Toggle Document Knowledge Base"
-          >
-            <span className="pulse-dot" />
-            <span className="rag-badge-text">
-              {indexedDocCount > 0 ? `${indexedDocCount} Doc${indexedDocCount === 1 ? '' : 's'} Grounded` : 'ChromaDB Active'}
-            </span>
-          </button>
-
           {/* Save as PDF Button */}
           {activeConversationId && messages.length > 0 && (
             <button
@@ -466,34 +394,20 @@ export default function ChatPanel({
 
           {pdfError && <span className="pdf-error-hint">{pdfError}</span>}
 
-          {/* New Chat Button */}
-          <button
-            type="button"
-            className="chat-header-action-btn new-chat-btn"
-            onClick={onNewChat}
-            title="Start a new chat (Ctrl+K)"
-            aria-label="New chat"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            <span className="btn-label-desktop">New Chat</span>
-          </button>
-
-          {/* Toggle Knowledge Base Drawer */}
+          {/* Toggle Knowledge Base Panel */}
           {onToggleDocPanel && (
             <button
               type="button"
               className={`chat-header-action-btn doc-panel-toggle-btn ${docPanelOpen ? 'active' : ''}`}
               onClick={onToggleDocPanel}
-              title={docPanelOpen ? 'Close Knowledge Panel' : 'Open Knowledge Panel'}
-              aria-label="Toggle Document Knowledge Panel"
+              title={docPanelOpen ? 'Close Knowledge Base panel' : 'Open Knowledge Base panel'}
+              aria-label="Toggle Document Knowledge Base"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
                 <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
               </svg>
+              <span className="btn-label-desktop">Knowledge Base</span>
             </button>
           )}
         </div>
@@ -529,25 +443,29 @@ export default function ChatPanel({
               </div>
             </div>
           ) : messages.length === 0 ? (
-            /* ── Reimagined Empty State ── */
+            /* ── Clean Empty States ── */
             <div className="chat-empty-canvas">
-              <div className="empty-canvas-hero">
-                <div className="empty-orbital-container">
-                  <div className="orbital-ring ring-outer" />
-                  <div className="orbital-ring ring-middle" />
-                  <div className="orbital-core-glyph">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                    </svg>
+              {indexedDocCount === 0 ? (
+                /* State 1: Clean empty state before any indexed document */
+                <div className="empty-canvas-hero">
+                  <div className="empty-orbital-container">
+                    <div className="orbital-ring ring-outer" />
+                    <div className="orbital-ring ring-middle" />
+                    <div className="orbital-core-glyph">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="12" y1="18" x2="12" y2="12" />
+                        <line x1="9" y1="15" x2="15" y2="15" />
+                      </svg>
+                    </div>
                   </div>
-                </div>
 
-                <h2 className="empty-hero-headline">Start working with your knowledge.</h2>
-                <p className="empty-hero-description">
-                  Ask questions, extract conclusions, and synthesize insights grounded in your verified documents with page-level citations.
-                </p>
+                  <h2 className="empty-hero-headline">Upload a document to get started</h2>
+                  <p className="empty-hero-description">
+                    Add a PDF, DOCX, or TXT to start asking questions.
+                  </p>
 
-                {indexedDocCount === 0 && (
                   <div className="empty-upload-cta-wrap">
                     <button
                       type="button"
@@ -556,36 +474,40 @@ export default function ChatPanel({
                         if (onOpenUpload) onOpenUpload();
                         else if (onToggleDocPanel) onToggleDocPanel();
                       }}
+                      aria-label="Upload Documents"
                     >
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                         <polyline points="17 8 12 3 7 8" />
                         <line x1="12" y1="3" x2="12" y2="15" />
                       </svg>
-                      <span>Upload Documents to Begin</span>
+                      <span>Upload Documents</span>
                     </button>
                   </div>
-                )}
-              </div>
-
-              {/* Suggestions Grid */}
-              <div className="empty-suggestions-grid">
-                {suggestions.map((card, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="suggestion-interactive-card"
-                    onClick={() => handleSend(card.prompt)}
-                    title={card.prompt}
-                  >
-                    <div className="suggestion-card-top">
-                      <span className="suggestion-card-icon">{card.icon}</span>
-                      <span className="suggestion-card-title">{card.title}</span>
+                </div>
+              ) : (
+                /* State 2: Ready state after document is successfully indexed */
+                <div className="empty-canvas-hero ready-state">
+                  <div className="empty-orbital-container ready-orbital">
+                    <div className="orbital-ring ring-outer ring-ready" />
+                    <div className="orbital-core-glyph ready-glyph">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
                     </div>
-                    <p className="suggestion-card-desc">{card.desc}</p>
-                  </button>
-                ))}
-              </div>
+                  </div>
+
+                  <h2 className="empty-hero-headline">Your knowledge base is ready.</h2>
+                  <p className="empty-hero-description">
+                    Ask anything about your documents.
+                  </p>
+
+                  <div className="empty-ready-badge">
+                    <span className="ready-status-dot" />
+                    <span>{indexedDocCount} document{indexedDocCount === 1 ? '' : 's'} indexed</span>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             /* ── Message List ── */
@@ -661,7 +583,7 @@ export default function ChatPanel({
               Press <strong>Enter</strong> to send • <strong>Shift + Enter</strong> for a new line
             </span>
             <span className="composer-security">
-              Grounded in ChromaDB with page-level citations
+              Grounded with verifiable page citations
             </span>
           </div>
         </div>

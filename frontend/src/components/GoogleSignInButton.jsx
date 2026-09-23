@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { API_BASE } from '../api/client';
 import './GoogleSignInButton.css';
 
 export default function GoogleSignInButton({
@@ -95,26 +96,9 @@ export default function GoogleSignInButton({
   const handleClick = () => {
     setError('');
 
-    // If Google Client ID is configured, trigger Google Identity prompt or OAuth redirect
-    if (googleClientId) {
-      if (window.google?.accounts?.id) {
-        try {
-          // Trigger One Tap prompt; if not displayed or skipped, redirect via OAuth flow
-          window.google.accounts.id.prompt((notification) => {
-            if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-              console.info('Google One-Tap not displayed, falling back to OAuth redirect...');
-              window.location.href = 'http://localhost:8000/auth/google/login';
-            }
-          });
-          return;
-        } catch (err) {
-          console.warn('Google One-Tap error, falling back to OAuth redirect:', err);
-          window.location.href = 'http://localhost:8000/auth/google/login';
-          return;
-        }
-      }
-      // Fallback: If Google Identity Services script is blocked or not loaded, use backend redirect flow
-      window.location.href = 'http://localhost:8000/auth/google/login';
+    // Trigger backend OAuth redirect flow
+    if (googleClientId || authConfig?.google_enabled || import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+      window.location.href = API_BASE + '/auth/google';
       return;
     }
 
