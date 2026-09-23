@@ -119,14 +119,20 @@ export default function FileUpload({ onUploadComplete, onFilesQueued }) {
         ) : (
           <div className="drop-zone-content">
             <div className="upload-icon-circle">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="17 8 12 3 7 8" />
                 <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
             </div>
-            <span className="upload-primary-text">Click to upload or drag &amp; drop</span>
-            <span className="upload-sub-text">PDF, DOCX, TXT · Up to {MAX_SIZE_MB}MB per file</span>
+            <span className="upload-primary-text">Drop documents here or click to browse</span>
+            <div className="upload-format-tags">
+              <span className="upload-format-chip">PDF</span>
+              <span className="upload-format-chip">DOCX</span>
+              <span className="upload-format-chip">TXT</span>
+              <span className="upload-format-sep">•</span>
+              <span className="upload-format-max">Max {MAX_SIZE_MB}MB</span>
+            </div>
           </div>
         )}
       </div>

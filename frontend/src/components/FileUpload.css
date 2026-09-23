@@ -63,8 +63,31 @@
   color: var(--text-primary);
 }
 
-.upload-sub-text {
-  font-size: 0.72rem;
+.upload-format-tags {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.upload-format-chip {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-hover);
+  color: var(--accent-text);
+  border: 1px solid var(--border);
+  letter-spacing: 0.03em;
+}
+
+.upload-format-sep {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.upload-format-max {
+  font-size: 0.7rem;
   color: var(--text-muted);
 }
 

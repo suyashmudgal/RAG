@@ -1,9 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import FileUpload from './FileUpload';
-import DocumentProcessingCard from './DocumentProcessingCard';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import ThemeToggle from './ThemeToggle';
 import { useAuth } from '../contexts/AuthContext';
-import { getDocuments, deleteDocument, getDocumentStatus, downloadDocumentFile } from '../api/client';
 import './Sidebar.css';
 
 export default function Sidebar({
@@ -14,236 +11,83 @@ export default function Sidebar({
   onSelectConversation,
   onNewChat,
   onDeleteConversation,
+  onRenameConversation,
+  onTogglePinConversation,
   loadingConversations = false,
-  onDocsChanged,
   onOpenSettings,
   onSignOut,
 }) {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'docs'
-  const [documents, setDocuments] = useState([]);
-  const [loadingDocs, setLoadingDocs] = useState(true);
-  const [deletingDoc, setDeletingDoc] = useState(null);
-  const [downloadingDoc, setDownloadingDoc] = useState(null);
-  const [deletingConv, setDeletingConv] = useState(null);
 
-  // Active document processing jobs: { [docId]: statusData }
-  const [processingDocs, setProcessingDocs] = useState({});
-  const pollingTimersRef = useRef({});
+  // Search filter
+  const [searchQuery, setSearchQuery] = useState('');
 
-  /* ── Fetch documents ── */
-  const fetchDocs = useCallback(async () => {
-    try {
-      setLoadingDocs(true);
-      const data = await getDocuments();
-      const docList = data.documents || [];
-      setDocuments(docList);
+  // Three-dot action menu
+  const [openMenuId, setOpenMenuId] = useState(null);
 
-      // Check if any indexed doc from server is currently in an active processing stage
-      docList.forEach((d) => {
-        const stage = d.processing_stage || d.status;
-        const isTerminal = stage === 'COMPLETED' || stage === 'FAILED' || stage === 'processed';
-        if (!isTerminal && d.document_id) {
-          setProcessingDocs((prev) => {
-            if (prev[d.document_id]) return prev;
-            return {
-              ...prev,
-              [d.document_id]: {
-                document_id: d.document_id,
-                filename: d.filename,
-                processing_stage: stage || 'QUEUED',
-                progress: d.progress || 25,
-                message: d.message || 'Processing in background…',
-                chunk_count: d.chunk_count || 0,
-                processed_chunks: d.processed_chunks || 0,
-                error: null,
-              },
-            };
-          });
-        }
-      });
+  // Inline rename state
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const editInputRef = useRef(null);
 
-      if (onDocsChanged) onDocsChanged();
-    } catch (err) {
-      console.error('Failed to fetch documents:', err);
-    } finally {
-      setLoadingDocs(false);
-    }
-  }, [onDocsChanged]);
+  // Delete confirmation
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
+  // Close menus on outside click or Escape
   useEffect(() => {
-    fetchDocs();
-  }, [fetchDocs]);
-
-  /* ── Status Polling per document ── */
-  const pollDocumentStatus = useCallback(
-    async (docId) => {
-      try {
-        const statusData = await getDocumentStatus(docId);
-
-        setProcessingDocs((prev) => {
-          if (!prev[docId]) return prev;
-          return {
-            ...prev,
-            [docId]: {
-              ...prev[docId],
-              ...statusData,
-            },
-          };
-        });
-
-        const stage = statusData.processing_stage || statusData.status;
-
-        if (stage === 'COMPLETED') {
-          // Terminal completion
-          if (pollingTimersRef.current[docId]) {
-            clearTimeout(pollingTimersRef.current[docId]);
-            delete pollingTimersRef.current[docId];
-          }
-          await fetchDocs();
-          return;
-        }
-
-        if (stage === 'FAILED') {
-          // Terminal failure
-          if (pollingTimersRef.current[docId]) {
-            clearTimeout(pollingTimersRef.current[docId]);
-            delete pollingTimersRef.current[docId];
-          }
-          return;
-        }
-
-        // Schedule next poll in 750ms
-        pollingTimersRef.current[docId] = setTimeout(() => {
-          pollDocumentStatus(docId);
-        }, 750);
-      } catch (err) {
-        console.warn(`Transient status poll error for ${docId}:`, err);
-        // Retry gracefully after 1500ms without crashing or spamming
-        pollingTimersRef.current[docId] = setTimeout(() => {
-          pollDocumentStatus(docId);
-        }, 1500);
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setOpenMenuId(null);
+        setEditingId(null);
+        setConfirmDeleteId(null);
       }
-    },
-    [fetchDocs]
-  );
+    };
 
-  // Monitor processingDocs and start polling for active docs not yet in pollingTimers
-  useEffect(() => {
-    Object.entries(processingDocs).forEach(([docId, doc]) => {
-      const stage = doc.processing_stage || doc.status;
-      const isTerminal = stage === 'COMPLETED' || stage === 'FAILED';
-      if (!isTerminal && !pollingTimersRef.current[docId]) {
-        // Start polling immediately
-        pollDocumentStatus(docId);
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.conv-menu-container') && !e.target.closest('.conv-menu-popover')) {
+        setOpenMenuId(null);
       }
-    });
-  }, [processingDocs, pollDocumentStatus]);
+      if (!e.target.closest('.conv-delete-confirm') && !e.target.closest('.conv-item-action-btn')) {
+        setConfirmDeleteId(null);
+      }
+    };
 
-  // Clean up all polling timers on unmount
-  useEffect(() => {
-    const timers = pollingTimersRef.current;
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
-      Object.values(timers).forEach(clearTimeout);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
 
-  /* ── Queued files from upload ── */
-  const handleFilesQueued = (newJobs) => {
-    setActiveTab('docs');
-    setProcessingDocs((prev) => {
-      const updated = { ...prev };
-      newJobs.forEach((job) => {
-        const id = job.document_id || job.id;
-        if (id) {
-          updated[id] = {
-            document_id: id,
-            filename: job.filename,
-            processing_stage: job.processing_stage || job.status || 'UPLOADED',
-            progress: job.progress ?? 25,
-            message: job.message || 'Uploaded to server',
-            chunk_count: job.chunk_count || 0,
-            processed_chunks: job.processed_chunks || 0,
-            error: null,
-          };
-        }
-      });
-      return updated;
-    });
-  };
-
-  const handleDismissProcessing = (docId) => {
-    if (pollingTimersRef.current[docId]) {
-      clearTimeout(pollingTimersRef.current[docId]);
-      delete pollingTimersRef.current[docId];
+  // Auto-focus inline rename input
+  useEffect(() => {
+    if (editingId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
     }
-    setProcessingDocs((prev) => {
-      const copy = { ...prev };
-      delete copy[docId];
-      return copy;
-    });
-  };
+  }, [editingId]);
 
-  /* ── Download Document ── */
-  const handleDownloadDoc = async (doc) => {
-    if (downloadingDoc) return;
-    setDownloadingDoc(doc.document_id);
-    try {
-      await downloadDocumentFile(doc.document_id, doc.filename);
-    } catch (err) {
-      alert(`Download failed: ${err.message}`);
-    } finally {
-      setDownloadingDoc(null);
-    }
-  };
+  // Client-side instant search filter
+  const filteredConversations = useMemo(() => {
+    if (!searchQuery.trim()) return conversations;
+    const q = searchQuery.toLowerCase();
+    return conversations.filter((c) =>
+      (c.title || 'New Conversation').toLowerCase().includes(q)
+    );
+  }, [conversations, searchQuery]);
 
-  /* ── Delete Document ── */
-  const handleDeleteDoc = async (docId) => {
-    if (deletingDoc) return;
-    setDeletingDoc(docId);
-    // Optimistically update list
-    const previousDocs = documents;
-    setDocuments((prev) => prev.filter((d) => d.document_id !== docId));
-    try {
-      await deleteDocument(docId);
-      await fetchDocs();
-    } catch (err) {
-      setDocuments(previousDocs);
-      alert(`Delete failed: ${err.message}`);
-    } finally {
-      setDeletingDoc(null);
-    }
-  };
+  // Partition into Pinned and Recent
+  const pinnedList = useMemo(() => {
+    return filteredConversations.filter((c) => Boolean(c.is_pinned));
+  }, [filteredConversations]);
 
-  /* ── Delete Conversation ── */
-  const handleDeleteConv = async (convId, e) => {
-    e.stopPropagation();
-    if (deletingConv) return;
-    setDeletingConv(convId);
-    try {
-      if (onDeleteConversation) {
-        await onDeleteConversation(convId);
-      }
-    } finally {
-      setDeletingConv(null);
-    }
-  };
+  const recentList = useMemo(() => {
+    return filteredConversations.filter((c) => !c.is_pinned);
+  }, [filteredConversations]);
 
-  const getFormatBadge = (name) => {
-    const ext = name.split('.').pop()?.toLowerCase();
-    if (ext === 'pdf') return <span className="doc-type-tag tag-pdf">PDF</span>;
-    if (ext === 'docx') return <span className="doc-type-tag tag-docx">DOC</span>;
-    return <span className="doc-type-tag tag-txt">TXT</span>;
-  };
-
-  const formatSize = (bytes) => {
-    if (!bytes) return '';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / 1048576).toFixed(1)} MB`;
-  };
-
-  const formatTimestamp = (isoString) => {
+  // Relative timestamp formatting
+  const formatTime = (isoString) => {
     if (!isoString) return '';
     try {
       const date = new Date(isoString);
@@ -263,311 +107,354 @@ export default function Sidebar({
     }
   };
 
-  const activeProcessingCount = Object.values(processingDocs).filter(
-    (d) => d.processing_stage !== 'COMPLETED' && d.processing_stage !== 'FAILED'
-  ).length;
+  /* ── Inline Rename Handlers ── */
+  const startRename = (conv, e) => {
+    e.stopPropagation();
+    setOpenMenuId(null);
+    setEditingId(conv.id);
+    setEditTitle(conv.title || 'New Conversation');
+  };
 
-  const initial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
+  const handleSaveRename = async (convId) => {
+    const trimmed = editTitle.trim();
+    setEditingId(null);
+    if (!trimmed) return;
+    if (onRenameConversation) {
+      await onRenameConversation(convId, trimmed);
+    }
+  };
+
+  const handleRenameKeyDown = (e, convId) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveRename(convId);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditingId(null);
+    }
+  };
+
+  /* ── Pin / Unpin Handlers ── */
+  const handleTogglePin = async (conv, e) => {
+    e.stopPropagation();
+    setOpenMenuId(null);
+    if (onTogglePinConversation) {
+      await onTogglePinConversation(conv.id, !conv.is_pinned);
+    }
+  };
+
+  /* ── Delete Handlers ── */
+  const handleDeleteClick = (convId, e) => {
+    e.stopPropagation();
+    setOpenMenuId(null);
+    setConfirmDeleteId(convId);
+  };
+
+  const handleConfirmDelete = async (convId, e) => {
+    e.stopPropagation();
+    setConfirmDeleteId(null);
+    if (onDeleteConversation) {
+      await onDeleteConversation(convId);
+    }
+  };
+
+  const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
+
+  const renderConversationRow = (conv) => {
+    const isActive = conv.id === activeConversationId;
+    const isEditing = editingId === conv.id;
+    const isMenuOpen = openMenuId === conv.id;
+    const isConfirmingDelete = confirmDeleteId === conv.id;
+
+    return (
+      <li
+        key={conv.id}
+        className={`sidebar-chat-row ${isActive ? 'is-active' : ''} ${conv.is_pinned ? 'is-pinned' : ''}`}
+        onClick={() => {
+          if (!isEditing && onSelectConversation) {
+            onSelectConversation(conv.id);
+            if (onClose) onClose();
+          }
+        }}
+        role="listitem"
+      >
+        <div className="chat-row-icon">
+          {conv.is_pinned ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+              <path d="M16 12V4H17V2H7V4H8V12L5 15V17H11V22L12 23L13 22V17H19V15L16 12Z" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          )}
+        </div>
+
+        {isEditing ? (
+          <div className="chat-row-inline-edit" onClick={(e) => e.stopPropagation()}>
+            <input
+              ref={editInputRef}
+              type="text"
+              className="chat-rename-input"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={(e) => handleRenameKeyDown(e, conv.id)}
+              onBlur={() => handleSaveRename(conv.id)}
+              aria-label="Edit chat title"
+            />
+          </div>
+        ) : (
+          <div className="chat-row-text">
+            <span className="chat-row-title" title={conv.title || 'New Conversation'}>
+              {conv.title || 'New Conversation'}
+            </span>
+            <span className="chat-row-time">
+              {formatTime(conv.updated_at || conv.created_at)}
+            </span>
+          </div>
+        )}
+
+        {/* Delete Confirmation Overlay */}
+        {isConfirmingDelete ? (
+          <div className="conv-delete-confirm" onClick={(e) => e.stopPropagation()}>
+            <span className="confirm-text">Delete?</span>
+            <button
+              type="button"
+              className="confirm-yes-btn"
+              onClick={(e) => handleConfirmDelete(conv.id, e)}
+              title="Confirm Delete"
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              className="confirm-no-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setConfirmDeleteId(null);
+              }}
+              title="Cancel"
+            >
+              ✕
+            </button>
+          </div>
+        ) : !isEditing && (
+          <div className="conv-menu-container" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className={`conv-item-action-btn ${isMenuOpen ? 'active' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenMenuId(isMenuOpen ? null : conv.id);
+              }}
+              title="Conversation options"
+              aria-label="Conversation options"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="5" r="2" />
+                <circle cx="12" cy="12" r="2" />
+                <circle cx="12" cy="19" r="2" />
+              </svg>
+            </button>
+
+            {isMenuOpen && (
+              <div className="conv-menu-popover" role="menu">
+                <button
+                  type="button"
+                  className="conv-menu-item"
+                  onClick={(e) => startRename(conv, e)}
+                  role="menuitem"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                  </svg>
+                  <span>Rename</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="conv-menu-item"
+                  onClick={(e) => handleTogglePin(conv, e)}
+                  role="menuitem"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="17" x2="12" y2="22" />
+                    <path d="M5 17h14v-2l-3-3V4h1V2H7v2h1v8l-3 3v2z" />
+                  </svg>
+                  <span>{conv.is_pinned ? 'Unpin' : 'Pin to top'}</span>
+                </button>
+
+                <div className="conv-menu-divider" />
+
+                <button
+                  type="button"
+                  className="conv-menu-item delete-item"
+                  onClick={(e) => handleDeleteClick(conv.id, e)}
+                  role="menuitem"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                  <span>Delete</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </li>
+    );
+  };
 
   return (
     <>
       {isOpen && <div className="sidebar-mobile-backdrop" onClick={onClose} />}
 
-      <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
-        {/* Header & Logo */}
-        <div className="sidebar-header">
-          <div className="sidebar-brand">
-            <div className="sidebar-brand-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`} aria-label="Chat conversations navigation">
+        {/* Brand & Workspace Title */}
+        <div className="sidebar-top-bar">
+          <div className="sidebar-brand-lockup">
+            <div className="sidebar-brand-glyph">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
                 <line x1="16" y1="13" x2="8" y2="13" />
                 <line x1="16" y1="17" x2="8" y2="17" />
               </svg>
             </div>
-            <div className="sidebar-brand-text">
-              <span className="sidebar-app-title">DocChat AI</span>
-              <span className="sidebar-app-badge">RAG Workspace</span>
+            <div className="sidebar-brand-meta">
+              <span className="sidebar-brand-name">DocChat AI</span>
+              <span className="sidebar-brand-badge">PRO WORKSPACE</span>
             </div>
           </div>
 
           {onClose && (
             <button
               type="button"
-              className="sidebar-close-mobile-btn"
+              className="sidebar-close-btn-mobile"
               onClick={onClose}
-              aria-label="Close Sidebar"
+              aria-label="Close sidebar"
             >
               ✕
             </button>
           )}
         </div>
 
-        {/* Primary Action: New Chat */}
-        <div className="sidebar-action-wrap">
+        {/* Action: + New Chat */}
+        <div className="sidebar-new-chat-container">
           <button
             type="button"
-            className="sidebar-new-chat-btn"
+            className="sidebar-primary-btn"
             onClick={() => {
               if (onNewChat) onNewChat();
               if (onClose) onClose();
             }}
-            title="Start a new chat thread (Ctrl+K)"
+            title="Start new conversation (Ctrl+K)"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
             <span>New Chat</span>
-            <span className="shortcut-hint">Ctrl K</span>
+            <kbd className="sidebar-shortcut-kbd">Ctrl K</kbd>
           </button>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="sidebar-tabs">
-          <button
-            type="button"
-            className={`sidebar-tab-btn ${activeTab === 'chats' ? 'active' : ''}`}
-            onClick={() => setActiveTab('chats')}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        {/* Instant Search Bar */}
+        <div className="sidebar-search-container">
+          <div className="sidebar-search-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
-            <span>Chats</span>
-            <span className="sidebar-tab-badge">{conversations.length}</span>
-          </button>
-          <button
-            type="button"
-            className={`sidebar-tab-btn ${activeTab === 'docs' ? 'active' : ''}`}
-            onClick={() => setActiveTab('docs')}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-              <polyline points="13 2 13 9 20 9" />
-            </svg>
-            <span>Documents</span>
-            {activeProcessingCount > 0 ? (
-              <span className="sidebar-tab-badge badge-active-proc" title={`${activeProcessingCount} processing`}>
-                {activeProcessingCount}
-              </span>
-            ) : (
-              <span className="sidebar-tab-badge">{documents.length}</span>
+            <input
+              type="text"
+              className="sidebar-search-input"
+              placeholder="Search conversations…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search conversations"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="sidebar-search-clear-btn"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
             )}
-          </button>
+          </div>
         </div>
 
-        {/* Scrollable Content Area */}
-        <div className="sidebar-scrollable-content">
-          {/* ── CHATS TAB ── */}
-          {activeTab === 'chats' && (
-            <div className="sidebar-pane-chats">
-              <div className="sidebar-section-header">
-                <span className="section-title">Previous Chats</span>
-              </div>
-
-              {loadingConversations ? (
-                <div className="skeleton-conversation-list" aria-label="Loading conversations">
-                  {[1, 2, 3, 4, 5].map((idx) => (
-                    <div key={idx} className="skeleton-conversation-item skeleton-shimmer">
-                      <div className="skeleton-line medium" style={{ marginBottom: '6px' }} />
-                      <div className="skeleton-line short" style={{ marginBottom: '0' }} />
-                    </div>
-                  ))}
+        {/* Scrollable Conversation List */}
+        <div className="sidebar-threads-scroll">
+          {loadingConversations ? (
+            <div className="sidebar-skeleton-stack" aria-label="Loading conversations">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="sidebar-skeleton-row skeleton-shimmer">
+                  <div className="skeleton-line medium" style={{ marginBottom: '6px' }} />
+                  <div className="skeleton-line short" style={{ marginBottom: '0' }} />
                 </div>
-              ) : conversations.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-state-icon">
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                    </svg>
-                  </div>
-                  <p className="empty-title">No previous chats</p>
-                  <p className="empty-hint">Start a conversation to analyze documents with verifiable citations.</p>
-                </div>
+              ))}
+            </div>
+          ) : filteredConversations.length === 0 ? (
+            <div className="sidebar-empty-threads">
+              {searchQuery ? (
+                <>
+                  <div className="empty-search-icon">🔍</div>
+                  <p className="empty-search-title">No conversations found</p>
+                  <p className="empty-search-sub">No chats match &ldquo;{searchQuery}&rdquo;</p>
+                </>
               ) : (
-                <ul className="conversation-list" role="list">
-                  {conversations.map((conv) => {
-                    const isActive = conv.id === activeConversationId;
-                    return (
-                      <li
-                        key={conv.id}
-                        className={`conversation-item ${isActive ? 'active' : ''}`}
-                        onClick={() => {
-                          if (onSelectConversation) onSelectConversation(conv.id);
-                          if (onClose) onClose();
-                        }}
-                        title={conv.title}
-                        role="listitem"
-                      >
-                        <div className="conv-icon">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                          </svg>
-                        </div>
-                        <div className="conv-details">
-                          <span className="conv-title">{conv.title || 'New Conversation'}</span>
-                          <span className="conv-date">{formatTimestamp(conv.updated_at || conv.created_at)}</span>
-                        </div>
-                        <button
-                          type="button"
-                          className="delete-conv-btn"
-                          onClick={(e) => handleDeleteConv(conv.id, e)}
-                          disabled={deletingConv === conv.id}
-                          title="Delete conversation"
-                          aria-label={`Delete ${conv.title}`}
-                        >
-                          {deletingConv === conv.id ? (
-                            <span className="spinner-small" />
-                          ) : (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6" />
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            </svg>
-                          )}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <>
+                  <div className="empty-search-icon">💬</div>
+                  <p className="empty-search-title">No conversations yet</p>
+                  <p className="empty-search-sub">Click &ldquo;New Chat&rdquo; to start querying your knowledge base.</p>
+                </>
               )}
             </div>
-          )}
-
-          {/* ── DOCUMENTS TAB ── */}
-          {activeTab === 'docs' && (
-            <div className="sidebar-pane-docs">
-              <FileUpload
-                onUploadComplete={fetchDocs}
-                onFilesQueued={handleFilesQueued}
-              />
-
-              {/* Active Document Processing Queue */}
-              {Object.keys(processingDocs).length > 0 && (
-                <div className="processing-queue-section">
-                  <div className="queue-section-header">
-                    <span className="queue-title">Live Ingestion Pipeline</span>
-                    <span className="pulse-dot" />
+          ) : (
+            <>
+              {/* PINNED SECTION */}
+              {pinnedList.length > 0 && (
+                <div className="sidebar-section-group">
+                  <div className="sidebar-section-header">
+                    <span className="sidebar-section-label">PINNED</span>
+                    <span className="sidebar-section-badge">{pinnedList.length}</span>
                   </div>
-                  <div className="processing-cards-container">
-                    {Object.values(processingDocs).map((pDoc) => (
-                      <DocumentProcessingCard
-                        key={pDoc.document_id}
-                        doc={pDoc}
-                        onDismiss={handleDismissProcessing}
-                      />
-                    ))}
-                  </div>
+                  <ul className="sidebar-threads-list" role="list">
+                    {pinnedList.map(renderConversationRow)}
+                  </ul>
                 </div>
               )}
 
-              {/* Indexed Files Section */}
-              <div className="documents-section">
-                <div className="documents-section-header">
-                  <div className="documents-title-row">
-                    <span className="documents-title">Indexed Files</span>
-                    <span className="doc-count-badge">{documents.length}</span>
-                  </div>
+              {/* RECENT SECTION */}
+              <div className="sidebar-section-group">
+                <div className="sidebar-section-header">
+                  <span className="sidebar-section-label">RECENT</span>
+                  <span className="sidebar-section-badge">{recentList.length}</span>
                 </div>
-
-                {loadingDocs && documents.length === 0 ? (
-                  <div className="skeleton-doc-list">
-                    {[1, 2, 3].map((idx) => (
-                      <div key={idx} className="skeleton-card skeleton-shimmer">
-                        <div className="skeleton-line medium" style={{ marginBottom: '6px' }} />
-                        <div className="skeleton-line short" style={{ marginBottom: '0' }} />
-                      </div>
-                    ))}
-                  </div>
-                ) : documents.length === 0 && Object.keys(processingDocs).length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-state-icon">
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                        <polyline points="13 2 13 9 20 9" />
-                      </svg>
-                    </div>
-                    <p className="empty-title">No documents yet</p>
-                    <p className="empty-hint">Upload PDF, DOCX, or TXT above to ground AI answers with verifiable citations.</p>
-                  </div>
+                {recentList.length === 0 && pinnedList.length > 0 ? (
+                  <p className="sidebar-section-empty">All conversations are pinned</p>
                 ) : (
-                  <ul className="document-list" role="list">
-                    {documents.map((doc) => {
-                      const isDeleting = deletingDoc === doc.document_id;
-                      const isDownloading = downloadingDoc === doc.document_id;
-                      return (
-                        <li key={doc.document_id} className="document-item" role="listitem">
-                          <div className="doc-info">
-                            <div className="doc-badge-col">{getFormatBadge(doc.filename)}</div>
-                            <div className="doc-details">
-                              <span className="doc-name" title={doc.filename}>
-                                {doc.filename}
-                              </span>
-                              <div className="doc-meta-row">
-                                <span className="doc-meta">
-                                  {doc.chunk_count} chunks
-                                  {doc.file_size ? ` • ${formatSize(doc.file_size)}` : ''}
-                                </span>
-                                <span className="doc-status-pill ready">Ready</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="doc-actions">
-                            {/* Download Action */}
-                            <button
-                              type="button"
-                              className="doc-action-btn download-btn"
-                              onClick={() => handleDownloadDoc(doc)}
-                              disabled={isDownloading || isDeleting}
-                              title={`Download ${doc.filename}`}
-                              aria-label={`Download ${doc.filename}`}
-                            >
-                              {isDownloading ? (
-                                <span className="spinner-small" />
-                              ) : (
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                  <polyline points="7 10 12 15 17 10" />
-                                  <line x1="12" y1="15" x2="12" y2="3" />
-                                </svg>
-                              )}
-                            </button>
-
-                            {/* Delete Action */}
-                            <button
-                              type="button"
-                              className="doc-action-btn delete-btn"
-                              onClick={() => handleDeleteDoc(doc.document_id)}
-                              disabled={isDeleting || isDownloading}
-                              title={`Delete ${doc.filename}`}
-                              aria-label={`Delete ${doc.filename}`}
-                            >
-                              {isDeleting ? (
-                                <span className="spinner-small" />
-                              ) : (
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="3 6 5 6 21 6" />
-                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                </svg>
-                              )}
-                            </button>
-                          </div>
-                        </li>
-                      );
-                    })}
+                  <ul className="sidebar-threads-list" role="list">
+                    {recentList.map(renderConversationRow)}
                   </ul>
                 )}
               </div>
-            </div>
+            </>
           )}
         </div>
 
-        {/* ── User & Profile Section at Bottom ── */}
-        <div className="sidebar-footer">
+        {/* User Account & Footer Controls */}
+        <div className="sidebar-footer-account">
           <div
-            className="sidebar-user-card"
+            className="sidebar-account-card"
             onClick={onOpenSettings}
-            title="Open Account Settings"
+            title="Account settings & profile"
             role="button"
             tabIndex={0}
             onKeyDown={(e) => {
@@ -577,12 +464,12 @@ export default function Sidebar({
               }
             }}
           >
-            <div className="sidebar-user-avatar">{initial}</div>
-            <div className="sidebar-user-info">
-              <span className="sidebar-user-name">{user?.name || 'User'}</span>
-              <span className="sidebar-user-email">{user?.email || ''}</span>
+            <div className="sidebar-account-avatar">{userInitial}</div>
+            <div className="sidebar-account-info">
+              <span className="sidebar-account-name">{user?.name || 'User'}</span>
+              <span className="sidebar-account-email">{user?.email || ''}</span>
             </div>
-            <div className="sidebar-user-gear">
+            <div className="sidebar-account-gear" title="Settings">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="3" />
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
@@ -590,7 +477,7 @@ export default function Sidebar({
             </div>
           </div>
 
-          <div className="sidebar-footer-actions">
+          <div className="sidebar-footer-controls">
             <ThemeToggle />
             <button
               type="button"

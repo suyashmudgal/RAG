@@ -2,27 +2,27 @@ import React from 'react';
 import './DocumentProcessingCard.css';
 
 const STAGE_LABELS = {
-  QUEUED: 'Waiting in queue',
-  UPLOADING: 'Uploading file',
-  UPLOADED: 'Upload complete',
-  EXTRACTING: 'Extracting text',
-  PARSING: 'Reading document',
-  CHUNKING: 'Creating document chunks',
+  QUEUED: 'Queued for processing',
+  UPLOADING: 'Uploading document',
+  UPLOADED: 'Uploaded to server',
+  EXTRACTING: 'Extracting document text',
+  PARSING: 'Parsing structure & pages',
+  CHUNKING: 'Creating semantic chunks',
   EMBEDDING: 'Creating AI embeddings',
-  INDEXING: 'Indexing document',
-  FINALIZING: 'Finalizing',
-  COMPLETED: 'Document ready',
-  FAILED: 'Processing failed',
+  INDEXING: 'Indexing in ChromaDB',
+  FINALIZING: 'Finalizing vector store',
+  COMPLETED: 'Document ready to query',
+  FAILED: 'Ingestion failed',
 };
 
 const PIPELINE_STEPS = [
-  { key: 'UPLOADING', label: 'Uploading file', rank: 1 },
-  { key: 'EXTRACTING', label: 'Extracting text', rank: 3 },
-  { key: 'PARSING', label: 'Reading document', rank: 4 },
-  { key: 'CHUNKING', label: 'Creating chunks', rank: 5 },
-  { key: 'EMBEDDING', label: 'Creating embeddings', rank: 6 },
-  { key: 'INDEXING', label: 'Indexing document', rank: 7 },
-  { key: 'FINALIZING', label: 'Finalizing', rank: 8 },
+  { key: 'UPLOADING', label: 'Upload', rank: 1 },
+  { key: 'EXTRACTING', label: 'Extract text', rank: 3 },
+  { key: 'PARSING', label: 'Parse pages', rank: 4 },
+  { key: 'CHUNKING', label: 'Semantic chunks', rank: 5 },
+  { key: 'EMBEDDING', label: 'AI embeddings', rank: 6 },
+  { key: 'INDEXING', label: 'Vector index', rank: 7 },
+  { key: 'FINALIZING', label: 'Finalize', rank: 8 },
 ];
 
 const STAGE_RANKS = {
@@ -48,6 +48,8 @@ export default function DocumentProcessingCard({ doc, onDismiss }) {
     message,
     chunk_count = 0,
     processed_chunks = 0,
+    chunks_processed = 0,
+    chunks_total = 0,
     error,
   } = doc;
 
@@ -55,11 +57,15 @@ export default function DocumentProcessingCard({ doc, onDismiss }) {
   const isFailed = processing_stage === 'FAILED';
   const isCompleted = processing_stage === 'COMPLETED';
 
+  // Support both backend naming conventions
+  const totalChunks = chunk_count || chunks_total || 0;
+  const doneChunks = processed_chunks || chunks_processed || 0;
+
   const ext = (filename || '').split('.').pop()?.toLowerCase();
   const badgeClass = ext === 'pdf' ? 'tag-pdf' : ext === 'docx' ? 'tag-docx' : 'tag-txt';
 
   return (
-    <div className={`doc-processing-card ${isFailed ? 'is-failed' : ''} ${isCompleted ? 'is-completed' : ''}`}>
+    <div className={`doc-processing-card ${isFailed ? 'is-failed' : ''} ${isCompleted ? 'is-completed' : ''}`} role="region" aria-label={`Processing status for ${filename}`}>
       {/* Header */}
       <div className="proc-card-header">
         <div className="proc-file-info">
@@ -76,7 +82,7 @@ export default function DocumentProcessingCard({ doc, onDismiss }) {
             className="proc-dismiss-btn"
             onClick={() => onDismiss(document_id)}
             title="Dismiss card"
-            aria-label="Dismiss card"
+            aria-label={`Dismiss processing card for ${filename}`}
           >
             ✕
           </button>
@@ -85,7 +91,7 @@ export default function DocumentProcessingCard({ doc, onDismiss }) {
 
       {/* Main Status or Error Alert */}
       {isFailed ? (
-        <div className="proc-error-banner">
+        <div className="proc-error-banner" role="alert">
           <div className="proc-error-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
@@ -106,16 +112,26 @@ export default function DocumentProcessingCard({ doc, onDismiss }) {
             </svg>
           </div>
           <div className="proc-completed-content">
-            <span className="proc-completed-title">Document Ready</span>
+            <span className="proc-completed-title">Ready for Grounded Chat</span>
             <span className="proc-completed-chunks">
-              {chunk_count} chunk{chunk_count === 1 ? '' : 's'} indexed &amp; ready to query
+              {totalChunks > 0 ? `${totalChunks} chunks indexed in ChromaDB` : 'Indexed and ready to query'}
             </span>
           </div>
         </div>
       ) : (
         <>
+          {/* Active Stage Callout */}
+          <div className="proc-active-status-bar">
+            <span className="proc-active-indicator">
+              <span className="pulse-dot" />
+            </span>
+            <span className="proc-active-text">
+              {STAGE_LABELS[processing_stage] || 'Processing document…'}
+            </span>
+          </div>
+
           {/* Visual Stage Stepper */}
-          <ul className="proc-stepper-list" aria-label="Processing Stages">
+          <ul className="proc-stepper-list" aria-label="Ingestion Stages">
             {PIPELINE_STEPS.map((step) => {
               const isDone = currentRank > step.rank || isCompleted;
               const isActive = !isCompleted && !isFailed && (
@@ -141,9 +157,7 @@ export default function DocumentProcessingCard({ doc, onDismiss }) {
                     )}
                   </span>
                   <span className="proc-step-label">
-                    {isActive
-                      ? STAGE_LABELS[processing_stage] || step.label
-                      : step.label}
+                    {step.label}
                   </span>
                 </li>
               );
@@ -163,13 +177,13 @@ export default function DocumentProcessingCard({ doc, onDismiss }) {
 
           {/* Chunks & Context Meta */}
           <div className="proc-meta-footer">
-            {chunk_count > 0 ? (
+            {totalChunks > 0 ? (
               <span className="proc-chunks-info">
-                {processed_chunks > 0 ? `${processed_chunks} / ` : ''}
-                {chunk_count} chunks
+                {doneChunks > 0 ? `${doneChunks} / ` : ''}
+                {totalChunks} chunks
               </span>
             ) : (
-              <span className="proc-chunks-info">Analyzing document structure…</span>
+              <span className="proc-chunks-info">Extracting content…</span>
             )}
             {message && <span className="proc-status-msg" title={message}>{message}</span>}
           </div>

@@ -205,6 +205,66 @@ export async function deleteConversation(conversationId) {
   return res.json();
 }
 
+export async function renameConversation(conversationId, title) {
+  const res = await fetch(`${API_BASE}/conversations/${conversationId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to rename conversation' }));
+    throw new Error(err.detail || 'Failed to rename conversation');
+  }
+  return res.json();
+}
+
+export async function pinConversation(conversationId, isPinned) {
+  const endpoint = isPinned
+    ? `${API_BASE}/conversations/${conversationId}/pin`
+    : `${API_BASE}/conversations/${conversationId}/unpin`;
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    // Fallback to PATCH if convenient
+    const patchRes = await fetch(`${API_BASE}/conversations/${conversationId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ is_pinned: isPinned }),
+    });
+    if (!patchRes.ok) {
+      const err = await patchRes.json().catch(() => ({ detail: 'Failed to update pin state' }));
+      throw new Error(err.detail || 'Failed to update pin state');
+    }
+    return patchRes.json();
+  }
+  return res.json();
+}
+
+export async function exportConversationPdf(conversationId, filename) {
+  const res = await fetch(`${API_BASE}/conversations/${conversationId}/export/pdf`, {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to export conversation as PDF' }));
+    throw new Error(err.detail || 'Failed to export conversation as PDF');
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename || `conversation_${conversationId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    window.URL.revokeObjectURL(url);
+    if (a.parentNode) a.parentNode.removeChild(a);
+  }, 100);
+}
+
 /* ── Chat (non-streaming) ────────────────────────────────────────────────── */
 
 export async function sendMessage(question, conversationId) {

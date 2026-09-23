@@ -91,6 +91,31 @@
   background: var(--bg-hover);
 }
 
+/* Active Status Bar */
+.proc-active-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+}
+
+.proc-active-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.proc-active-text {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent-text);
+  letter-spacing: 0.01em;
+}
+
 /* Stepper List */
 .proc-stepper-list {
   list-style: none;

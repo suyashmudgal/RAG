@@ -1,34 +1,60 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import MessageBubble from './MessageBubble';
-import ThemeToggle from './ThemeToggle';
-import { streamMessage, getConversation } from '../api/client';
+import { streamMessage, getConversation, exportConversationPdf, renameConversation } from '../api/client';
 import './ChatPanel.css';
 
-const SUGGESTION_CARDS = [
+const DEFAULT_SUGGESTIONS_WITH_DOCS = [
   {
     icon: '📄',
-    title: 'Summarize my document',
-    desc: 'Extract key findings, themes, and takeaways',
-    prompt: 'Can you summarize the most important findings and takeaways across the uploaded documents?',
+    title: 'Summarize key findings',
+    desc: 'Extract main takeaways, themes, and conclusions',
+    prompt: 'Can you provide a comprehensive summary of the key findings, conclusions, and takeaways from the uploaded documents?',
   },
   {
     icon: '💡',
-    title: 'Explain in simple terms',
-    desc: 'Break down complex concepts clearly',
-    prompt: 'Explain the key concepts and ideas in these documents in simple, beginner-friendly terms.',
+    title: 'Explain complex concepts',
+    desc: 'Break down intricate sections in plain language',
+    prompt: 'Explain the core methodologies and most intricate concepts in these documents using clear, beginner-friendly terms.',
   },
   {
     icon: '🎯',
-    title: 'Find important points',
-    desc: 'Identify critical policies, rules, and facts',
-    prompt: 'What are the main requirements, policy rules, and critical points outlined in these files?',
+    title: 'Identify requirements & facts',
+    desc: 'Locate policies, rules, conditions, and constraints',
+    prompt: 'What are the critical requirements, constraints, policies, and conditions explicitly stated across the documents?',
   },
   {
     icon: '📊',
-    title: 'Ask about metrics & numbers',
-    desc: 'Locate statistics, data points, and figures',
-    prompt: 'Extract all key figures, numerical data, statistics, and metrics mentioned in the documents.',
+    title: 'Extract metrics & numbers',
+    desc: 'Isolate statistics, figures, percentages, and data',
+    prompt: 'Extract all quantifiable metrics, statistics, percentages, and numerical facts presented in the documents with citations.',
+  },
+];
+
+const DEFAULT_SUGGESTIONS_NO_DOCS = [
+  {
+    icon: '🚀',
+    title: 'Upload research or notes',
+    desc: 'Ground AI in research papers, reports, or contracts',
+    prompt: 'How do verifiable citations work when I query my uploaded documents?',
+  },
+  {
+    icon: '📑',
+    title: 'Multi-document synthesis',
+    desc: 'Compare facts across multiple PDF, DOCX, or TXT files',
+    prompt: 'How does DocChat AI prevent hallucinations using ChromaDB vector search?',
+  },
+  {
+    icon: '🔍',
+    title: 'Page-level citation precision',
+    desc: 'Inspect exact source quotes, page numbers, and similarity',
+    prompt: 'What document formats are supported and how are pages chunked?',
+  },
+  {
+    icon: '⚡',
+    title: 'Instant local embeddings',
+    desc: 'Fast semantic retrieval without external API costs',
+    prompt: 'Explain the end-to-end RAG ingestion pipeline from upload to vector index.',
   },
 ];
 
@@ -38,6 +64,10 @@ export default function ChatPanel({
   onConversationCreated,
   onNewChat,
   onToggleSidebar,
+  onToggleDocPanel,
+  docPanelOpen = false,
+  indexedDocCount = 0,
+  onOpenUpload,
 }) {
   const [messages, setMessages] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -45,7 +75,17 @@ export default function ChatPanel({
   const [isStreaming, setIsStreaming] = useState(false);
   const [userScrolledUp, setUserScrolledUp] = useState(false);
 
-  // In-memory conversation cache: { [convId]: messagesArray }
+  // PDF Export state
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [pdfSuccess, setPdfSuccess] = useState(false);
+  const [pdfError, setPdfError] = useState('');
+
+  // Inline rename header state
+  const [isRenamingHeader, setIsRenamingHeader] = useState(false);
+  const [headerTitle, setHeaderTitle] = useState('');
+  const headerInputRef = useRef(null);
+
+  // In-memory conversation messages cache: { [convId]: messagesArray }
   const messageCacheRef = useRef({});
   const inFlightFetchRef = useRef(null);
 
@@ -255,9 +295,62 @@ export default function ChatPanel({
     }
   };
 
+  /* ── Save Chat as PDF ── */
+  const handleExportPdf = async () => {
+    if (!activeConversationId || exportingPdf) return;
+    setExportingPdf(true);
+    setPdfError('');
+    setPdfSuccess(false);
+
+    try {
+      const safeTitle = (activeConversationTitle || 'Conversation')
+        .replace(/[^a-zA-Z0-9_\- ]/g, '')
+        .trim();
+      await exportConversationPdf(activeConversationId, `${safeTitle || 'conversation'}.pdf`);
+      setPdfSuccess(true);
+      setTimeout(() => setPdfSuccess(false), 3000);
+    } catch (err) {
+      console.error('PDF export failed:', err);
+      setPdfError(err.message || 'Export failed');
+      setTimeout(() => setPdfError(''), 4000);
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  /* ── Header Inline Rename ── */
+  const startHeaderRename = () => {
+    if (!activeConversationId) return;
+    setHeaderTitle(activeConversationTitle || 'New Conversation');
+    setIsRenamingHeader(true);
+    setTimeout(() => {
+      headerInputRef.current?.focus();
+      headerInputRef.current?.select();
+    }, 50);
+  };
+
+  const handleSaveHeaderRename = async () => {
+    const trimmed = headerTitle.trim();
+    setIsRenamingHeader(false);
+    if (!trimmed || trimmed === activeConversationTitle) return;
+
+    try {
+      await renameConversation(activeConversationId, trimmed);
+      if (onConversationCreated) {
+        onConversationCreated(activeConversationId);
+      }
+    } catch (err) {
+      console.error('Failed to rename conversation:', err);
+    }
+  };
+
+  const suggestions = indexedDocCount > 0
+    ? DEFAULT_SUGGESTIONS_WITH_DOCS
+    : DEFAULT_SUGGESTIONS_NO_DOCS;
+
   return (
-    <main className="chat-panel">
-      {/* Top Header */}
+    <main className="chat-panel" role="main">
+      {/* ── Top Header ── */}
       <header className="chat-header">
         <div className="chat-header-left">
           {onToggleSidebar && (
@@ -265,10 +358,10 @@ export default function ChatPanel({
               type="button"
               className="chat-mobile-toggle-btn"
               onClick={onToggleSidebar}
-              title="Toggle Sidebar"
-              aria-label="Toggle Sidebar"
+              title="Toggle sidebar"
+              aria-label="Toggle sidebar navigation"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="3" y1="12" x2="21" y2="12" />
                 <line x1="3" y1="6" x2="21" y2="6" />
                 <line x1="3" y1="18" x2="21" y2="18" />
@@ -276,52 +369,137 @@ export default function ChatPanel({
             </button>
           )}
 
-          <Link to="/" className="chat-home-link" title="Return to Landing Page">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <Link to="/" className="chat-home-nav-link" title="Back to Landing Page">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="19" y1="12" x2="5" y2="12" />
               <polyline points="12 19 5 12 12 5" />
             </svg>
-            <span>Landing Page</span>
+            <span>Landing</span>
           </Link>
 
-          <div className="chat-title-group">
-            <h2 className="chat-title-text">
-              {activeConversationTitle || 'Grounded AI Assistant'}
-            </h2>
-            {activeConversationId ? (
-              <span className="chat-thread-badge" title={`Conversation ID: ${activeConversationId}`}>
-                Thread #{activeConversationId.slice(0, 6)}
-              </span>
+          {/* Conversation Title */}
+          <div className="chat-title-container">
+            {isRenamingHeader ? (
+              <input
+                ref={headerInputRef}
+                type="text"
+                className="chat-header-rename-input"
+                value={headerTitle}
+                onChange={(e) => setHeaderTitle(e.target.value)}
+                onBlur={handleSaveHeaderRename}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveHeaderRename();
+                  if (e.key === 'Escape') setIsRenamingHeader(false);
+                }}
+                aria-label="Rename conversation title"
+              />
             ) : (
-              <span className="chat-thread-badge new-thread">New Session</span>
+              <div
+                className="chat-title-interactive"
+                onClick={activeConversationId ? startHeaderRename : undefined}
+                title={activeConversationId ? 'Click to rename' : ''}
+              >
+                <h1 className="chat-title-text">
+                  {activeConversationTitle || 'New Conversation'}
+                </h1>
+                {activeConversationId && (
+                  <svg className="chat-rename-hint-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                  </svg>
+                )}
+              </div>
             )}
           </div>
         </div>
 
         <div className="chat-header-right">
-          <div className="rag-status-indicator" title="Grounded by local ChromaDB vector store">
-            <span className="pulse-dot" />
-            <span className="rag-status-text">ChromaDB Grounded</span>
-          </div>
-
-          <ThemeToggle />
-
+          {/* Grounding / Knowledge Status Badge */}
           <button
             type="button"
-            className="chat-header-new-btn"
+            className={`rag-grounding-badge ${docPanelOpen ? 'active' : ''}`}
+            onClick={onToggleDocPanel}
+            title="Toggle Document Knowledge Base"
+            aria-label="Toggle Document Knowledge Base"
+          >
+            <span className="pulse-dot" />
+            <span className="rag-badge-text">
+              {indexedDocCount > 0 ? `${indexedDocCount} Doc${indexedDocCount === 1 ? '' : 's'} Grounded` : 'ChromaDB Active'}
+            </span>
+          </button>
+
+          {/* Save as PDF Button */}
+          {activeConversationId && messages.length > 0 && (
+            <button
+              type="button"
+              className={`chat-header-action-btn pdf-btn ${exportingPdf ? 'loading' : ''} ${pdfSuccess ? 'success' : ''}`}
+              onClick={handleExportPdf}
+              disabled={exportingPdf}
+              title="Save conversation as formatted PDF"
+              aria-label="Save conversation as PDF"
+            >
+              {exportingPdf ? (
+                <>
+                  <span className="spinner-small" />
+                  <span className="btn-label-desktop">Preparing PDF…</span>
+                </>
+              ) : pdfSuccess ? (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span className="btn-label-desktop">PDF saved</span>
+                </>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="12" y1="18" x2="12" y2="12" />
+                    <line x1="9" y1="15" x2="15" y2="15" />
+                  </svg>
+                  <span className="btn-label-desktop">Save as PDF</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {pdfError && <span className="pdf-error-hint">{pdfError}</span>}
+
+          {/* New Chat Button */}
+          <button
+            type="button"
+            className="chat-header-action-btn new-chat-btn"
             onClick={onNewChat}
-            title="Start new chat"
+            title="Start a new chat (Ctrl+K)"
+            aria-label="New chat"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            <span>New Chat</span>
+            <span className="btn-label-desktop">New Chat</span>
           </button>
+
+          {/* Toggle Knowledge Base Drawer */}
+          {onToggleDocPanel && (
+            <button
+              type="button"
+              className={`chat-header-action-btn doc-panel-toggle-btn ${docPanelOpen ? 'active' : ''}`}
+              onClick={onToggleDocPanel}
+              title={docPanelOpen ? 'Close Knowledge Panel' : 'Open Knowledge Panel'}
+              aria-label="Toggle Document Knowledge Panel"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+              </svg>
+            </button>
+          )}
         </div>
       </header>
 
-      {/* Messages Scroll Area */}
+      {/* ── Messages Canvas ── */}
       <div
         className="messages-scroll-area"
         ref={scrollContainerRef}
@@ -329,8 +507,8 @@ export default function ChatPanel({
       >
         <div className="messages-centered-column">
           {loadingHistory ? (
-            /* Skeleton Messages */
-            <div className="skeleton-chat-container" aria-label="Loading messages">
+            /* Skeleton Messages during thread switch */
+            <div className="skeleton-chat-container" aria-label="Loading conversation history">
               <div className="skeleton-msg-row user">
                 <div className="skeleton-bubble user skeleton-shimmer">
                   <div className="skeleton-line medium" />
@@ -351,46 +529,67 @@ export default function ChatPanel({
               </div>
             </div>
           ) : messages.length === 0 ? (
-            /* Empty State */
-            <div className="chat-empty-state">
-              <div className="empty-state-aura">
-                <div className="empty-state-glyph">
-                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <line x1="16" y1="13" x2="8" y2="13" />
-                    <line x1="16" y1="17" x2="8" y2="17" />
-                  </svg>
+            /* ── Reimagined Empty State ── */
+            <div className="chat-empty-canvas">
+              <div className="empty-canvas-hero">
+                <div className="empty-orbital-container">
+                  <div className="orbital-ring ring-outer" />
+                  <div className="orbital-ring ring-middle" />
+                  <div className="orbital-core-glyph">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                    </svg>
+                  </div>
                 </div>
+
+                <h2 className="empty-hero-headline">Start working with your knowledge.</h2>
+                <p className="empty-hero-description">
+                  Ask questions, extract conclusions, and synthesize insights grounded in your verified documents with page-level citations.
+                </p>
+
+                {indexedDocCount === 0 && (
+                  <div className="empty-upload-cta-wrap">
+                    <button
+                      type="button"
+                      className="empty-upload-cta-btn"
+                      onClick={() => {
+                        if (onOpenUpload) onOpenUpload();
+                        else if (onToggleDocPanel) onToggleDocPanel();
+                      }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                      </svg>
+                      <span>Upload Documents to Begin</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <h1 className="empty-hero-title">Your documents, understood.</h1>
-              <p className="empty-hero-subtitle">
-                Upload a document and ask anything about it. Responses are grounded in your files with page-level citations.
-              </p>
-
-              {/* Curated Suggestion Cards */}
-              <div className="suggestions-grid">
-                {SUGGESTION_CARDS.map((card, idx) => (
+              {/* Suggestions Grid */}
+              <div className="empty-suggestions-grid">
+                {suggestions.map((card, idx) => (
                   <button
                     key={idx}
                     type="button"
-                    className="suggestion-card"
+                    className="suggestion-interactive-card"
                     onClick={() => handleSend(card.prompt)}
                     title={card.prompt}
                   >
-                    <div className="suggestion-card-header">
-                      <span className="suggestion-icon">{card.icon}</span>
-                      <span className="suggestion-title">{card.title}</span>
+                    <div className="suggestion-card-top">
+                      <span className="suggestion-card-icon">{card.icon}</span>
+                      <span className="suggestion-card-title">{card.title}</span>
                     </div>
-                    <p className="suggestion-desc">{card.desc}</p>
+                    <p className="suggestion-card-desc">{card.desc}</p>
                   </button>
                 ))}
               </div>
             </div>
           ) : (
-            /* Message List */
-            <div className="messages-list">
+            /* ── Message List ── */
+            <div className="messages-thread-list">
               {messages.map((msg, idx) => (
                 <MessageBubble key={idx} message={msg} />
               ))}
@@ -416,7 +615,7 @@ export default function ChatPanel({
         </button>
       )}
 
-      {/* Composer Input Dock */}
+      {/* ── Composer Dock ── */}
       <footer className="chat-composer-dock">
         <div className="composer-inner-wrapper">
           <div className="composer-box">
@@ -426,7 +625,13 @@ export default function ChatPanel({
               value={input}
               onChange={handleInputChange}
               onKeyDown={onKeyDown}
-              placeholder={isStreaming ? 'Synthesizing response from documents…' : 'Ask anything about your documents…'}
+              placeholder={
+                isStreaming
+                  ? 'Synthesizing response from verified documents…'
+                  : indexedDocCount > 0
+                  ? 'Ask anything about your documents…'
+                  : 'Ask anything or upload documents for grounded citations…'
+              }
               disabled={isStreaming}
               rows={1}
               aria-label="Chat input message"
@@ -443,7 +648,7 @@ export default function ChatPanel({
               {isStreaming ? (
                 <span className="spinner-small" />
               ) : (
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="22" y1="2" x2="11" y2="13" />
                   <polygon points="22 2 15 22 11 13 2 9 22 2" />
                 </svg>
@@ -456,7 +661,7 @@ export default function ChatPanel({
               Press <strong>Enter</strong> to send • <strong>Shift + Enter</strong> for a new line
             </span>
             <span className="composer-security">
-              Verified by precision citation filters
+              Grounded in ChromaDB with page-level citations
             </span>
           </div>
         </div>
