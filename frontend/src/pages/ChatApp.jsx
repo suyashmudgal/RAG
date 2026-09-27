@@ -246,7 +246,7 @@ export default function ChatApp() {
       await fetchDocs();
     } catch (err) {
       setDocuments(previousDocs);
-      alert(`Delete document failed: ${err.message}`);
+      throw err;
     } finally {
       setDeletingDoc(null);
     }
@@ -365,7 +365,7 @@ export default function ChatApp() {
       }
       const docStage = (d.processing_stage || d.status || '').toUpperCase();
       if (docStage === 'FAILED' || docStage === 'ERROR') return false;
-      return docStage === 'COMPLETED' || docStage === 'PROCESSED' || docStage === 'INDEXED' || (!docStage && !d.error);
+      return docStage === 'COMPLETED' || docStage === 'PROCESSED' || docStage === 'INDEXED' || (!docStage && (d.chunk_count > 0 || d.chunks_total > 0));
     }).length;
   }, [documents, processingDocs]);
 
@@ -398,7 +398,6 @@ export default function ChatApp() {
           activeConversationId={activeConversationId}
           activeConversationTitle={activeConv?.title || ''}
           onConversationCreated={handleConversationCreated}
-          onNewChat={handleNewChat}
           onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
           onToggleDocPanel={() => setDocPanelOpen((prev) => !prev)}
           docPanelOpen={docPanelOpen}

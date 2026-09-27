@@ -8,16 +8,66 @@ import vscDarkPlus from 'react-syntax-highlighter/dist/esm/styles/prism/vsc-dark
 import './MarkdownRenderer.css';
 
 /**
- * Normalizes LaTeX math delimiters:
- * Converts \[ ... \] to $$ ... $$ (display math)
- * Converts \( ... \) to $ ... $ (inline math)
- * Leaves existing $$ ... $$ and $ ... $ intact.
+ * Normalizes LaTeX math delimiters while safely protecting code blocks:
+ * - Preserves fenced code blocks (```...```) and inline code (`...`) completely intact.
+ * - Converts \[ ... \] to $$ ... $$ (display math)
+ * - Converts \( ... \) to $ ... $ (inline math)
+ * - Wraps LaTeX equation/align blocks in $$ ... $$
+ * - Wraps standalone unenclosed LaTeX equations (e.g. \frac{266}{11}\text{ minutes}) in $$ ... $$
+ * - Leaves standard $$ ... $$ and $ ... $ intact.
  */
 function normalizeMathDelimiters(text) {
   if (!text) return '';
-  return text
-    .replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => `$$\n${math.trim()}\n$$`)
-    .replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => `$${math.trim()}$`);
+
+  // Protect code blocks: split by code fences ```...```
+  const codeBlockRegex = /(```[\s\S]*?```)/g;
+  const parts = text.split(codeBlockRegex);
+
+  return parts
+    .map((part, index) => {
+      // If inside a fenced code block, leave untouched
+      if (index % 2 === 1) return part;
+
+      // Protect inline code `...`
+      const inlineCodeRegex = /(`[^`\n]+`)/g;
+      const subParts = part.split(inlineCodeRegex);
+
+      return subParts
+        .map((subPart, subIndex) => {
+          if (subIndex % 2 === 1) return subPart;
+
+          let res = subPart;
+
+          // Normalize LaTeX display math \[ ... \] -> $$ ... $$
+          res = res.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => `$$\n${math.trim()}\n$$`);
+
+          // Normalize LaTeX inline math \( ... \) -> $ ... $
+          res = res.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => `$${math.trim()}$`);
+
+          // Normalize \begin{equation/align/gather/matrix} ... \end{...} -> $$ ... $$
+          res = res.replace(
+            /\\begin\{(equation\*?|align\*?|gather\*?|pmatrix\*?|bmatrix\*?|vmatrix\*?)\}([\s\S]*?)\\end\{\1\}/g,
+            (_, env, body) => `$$\n\\begin{${env}}${body}\\end{${env}}\n$$`
+          );
+
+          // Normalize standalone lines starting with LaTeX commands (e.g. \frac{266}{11}\text{ minutes})
+          res = res.replace(
+            /(^|\n)\s*(\\(?:frac|sqrt|sum|int|prod|lim)\b[^\n$]+?)(\n|$)/g,
+            (match, prefix, math, suffix) => {
+              const openBraces = (math.match(/\{/g) || []).length;
+              const closeBraces = (math.match(/\}/g) || []).length;
+              if (openBraces > 0 && openBraces === closeBraces) {
+                return `${prefix}$$\n${math.trim()}\n$$${suffix}`;
+              }
+              return match;
+            }
+          );
+
+          return res;
+        })
+        .join('');
+    })
+    .join('');
 }
 
 /**
@@ -100,7 +150,7 @@ export default function MarkdownRenderer({ content, isStreaming }) {
     <div className="markdown-content">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]}
         components={{
           // Custom responsive table wrapper
           table({ node, ...props }) {

@@ -297,42 +297,7 @@
   background: var(--error-bg);
 }
 
-/* Inline Confirm Box */
-.doc-delete-confirm-box {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.72rem;
-  background: var(--error-bg);
-  border: 1px solid var(--error-border);
-  padding: 4px 8px;
-  border-radius: var(--radius-xs);
-}
 
-.doc-confirm-msg {
-  color: var(--error);
-  font-weight: 600;
-}
-
-.doc-confirm-yes-btn {
-  background: var(--error);
-  color: #ffffff;
-  border: none;
-  padding: 2px 7px;
-  border-radius: var(--radius-xs);
-  cursor: pointer;
-  font-size: 0.7rem;
-  font-weight: 600;
-}
-
-.doc-confirm-cancel-btn {
-  background: transparent;
-  color: var(--text-secondary);
-  border: none;
-  padding: 2px 4px;
-  cursor: pointer;
-  font-size: 0.7rem;
-}
 
 /* Skeletons & Empty State */
 .doc-skeleton-list {

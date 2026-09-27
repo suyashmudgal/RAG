@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import FileUpload from './FileUpload';
 import DocumentProcessingCard from './DocumentProcessingCard';
+import DeleteDocumentModal from './DeleteDocumentModal';
 import './DocumentContextPanel.css';
 
 export default function DocumentContextPanel({
@@ -18,7 +19,11 @@ export default function DocumentContextPanel({
   downloadingDoc = null,
 }) {
   const [docSearch, setDocSearch] = useState('');
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  
+  // Professional Delete Document Modal State
+  const [docToDelete, setDocToDelete] = useState(null);
+  const [isDeletingModalDoc, setIsDeletingModalDoc] = useState(false);
+  const [deleteModalError, setDeleteModalError] = useState(null);
 
   // Active processing jobs array
   const processingList = useMemo(() => {
@@ -52,14 +57,19 @@ export default function DocumentContextPanel({
     return <span className="doc-format-badge badge-txt">TXT</span>;
   };
 
-  const handleDeleteClick = (docId) => {
-    setConfirmDeleteId(docId);
-  };
-
-  const handleConfirmDelete = async (docId) => {
-    setConfirmDeleteId(null);
-    if (onDeleteDoc) {
-      await onDeleteDoc(docId);
+  const handleConfirmModalDelete = async () => {
+    if (!docToDelete || isDeletingModalDoc) return;
+    setIsDeletingModalDoc(true);
+    setDeleteModalError(null);
+    try {
+      if (onDeleteDoc) {
+        await onDeleteDoc(docToDelete.document_id);
+      }
+      setDocToDelete(null);
+    } catch (err) {
+      setDeleteModalError(err.message || 'Failed to delete document. Please try again.');
+    } finally {
+      setIsDeletingModalDoc(false);
     }
   };
 
@@ -201,9 +211,8 @@ export default function DocumentContextPanel({
           ) : (
             <ul className="doc-library-list" role="list">
               {filteredDocs.map((doc) => {
-                const isDeleting = deletingDoc === doc.document_id;
+                const isDeleting = deletingDoc === doc.document_id || (isDeletingModalDoc && docToDelete?.document_id === doc.document_id);
                 const isDownloading = downloadingDoc === doc.document_id;
-                const isConfirming = confirmDeleteId === doc.document_id;
 
                 return (
                   <li key={doc.document_id} className="doc-library-item" role="listitem">
@@ -228,66 +237,47 @@ export default function DocumentContextPanel({
                       </div>
                     </div>
 
-                    {isConfirming ? (
-                      <div className="doc-delete-confirm-box">
-                        <span className="doc-confirm-msg">Delete file?</span>
-                        <button
-                          type="button"
-                          className="doc-confirm-yes-btn"
-                          onClick={() => handleConfirmDelete(doc.document_id)}
-                          aria-label="Confirm delete"
-                        >
-                          Delete
-                        </button>
-                        <button
-                          type="button"
-                          className="doc-confirm-cancel-btn"
-                          onClick={() => setConfirmDeleteId(null)}
-                          aria-label="Cancel delete"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="doc-library-actions">
-                        <button
-                          type="button"
-                          className="doc-action-icon-btn"
-                          onClick={() => onDownloadDoc && onDownloadDoc(doc)}
-                          disabled={isDownloading || isDeleting}
-                          title={`Download ${doc.filename}`}
-                          aria-label={`Download ${doc.filename}`}
-                        >
-                          {isDownloading ? (
-                            <span className="spinner-small" />
-                          ) : (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                              <polyline points="7 10 12 15 17 10" />
-                              <line x1="12" y1="15" x2="12" y2="3" />
-                            </svg>
-                          )}
-                        </button>
+                    <div className="doc-library-actions">
+                      <button
+                        type="button"
+                        className="doc-action-icon-btn"
+                        onClick={() => onDownloadDoc && onDownloadDoc(doc)}
+                        disabled={isDownloading || isDeleting}
+                        title={`Download ${doc.filename}`}
+                        aria-label={`Download ${doc.filename}`}
+                      >
+                        {isDownloading ? (
+                          <span className="spinner-small" />
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                        )}
+                      </button>
 
-                        <button
-                          type="button"
-                          className="doc-action-icon-btn delete"
-                          onClick={() => handleDeleteClick(doc.document_id)}
-                          disabled={isDeleting || isDownloading}
-                          title={`Delete ${doc.filename}`}
-                          aria-label={`Delete ${doc.filename}`}
-                        >
-                          {isDeleting ? (
-                            <span className="spinner-small" />
-                          ) : (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6" />
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            </svg>
-                          )}
-                        </button>
-                      </div>
-                    )}
+                      <button
+                        type="button"
+                        className="doc-action-icon-btn delete"
+                        onClick={() => {
+                          setDocToDelete(doc);
+                          setDeleteModalError(null);
+                        }}
+                        disabled={isDeleting || isDownloading}
+                        title={`Delete ${doc.filename}`}
+                        aria-label={`Delete ${doc.filename}`}
+                      >
+                        {isDeleting ? (
+                          <span className="spinner-small" />
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                   </li>
                 );
               })}
@@ -295,6 +285,21 @@ export default function DocumentContextPanel({
           )}
         </section>
       </div>
+
+      {/* Professional Accessible Delete Confirmation Modal */}
+      <DeleteDocumentModal
+        isOpen={Boolean(docToDelete)}
+        doc={docToDelete}
+        isDeleting={isDeletingModalDoc}
+        error={deleteModalError}
+        onConfirm={handleConfirmModalDelete}
+        onCancel={() => {
+          if (!isDeletingModalDoc) {
+            setDocToDelete(null);
+            setDeleteModalError(null);
+          }
+        }}
+      />
     </aside>
   );
 }

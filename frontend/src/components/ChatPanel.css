@@ -136,33 +136,6 @@
   flex-shrink: 0;
 }
 
-/* Grounding Badge */
-.rag-grounding-badge {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 10px;
-  border-radius: var(--radius-full);
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.rag-grounding-badge:hover,
-.rag-grounding-badge.active {
-  border-color: var(--success-border);
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-.rag-badge-text {
-  letter-spacing: 0.01em;
-}
-
 /* Header Actions */
 .chat-header-action-btn {
   display: flex;
@@ -183,17 +156,6 @@
   color: var(--text-primary);
   background: var(--bg-hover);
   border-color: var(--border-light);
-}
-
-.chat-header-action-btn.new-chat-btn {
-  background: var(--accent-dim);
-  border-color: var(--accent-border);
-  color: var(--accent-text);
-}
-
-.chat-header-action-btn.new-chat-btn:hover {
-  background: var(--accent);
-  color: #ffffff;
 }
 
 .chat-header-action-btn.pdf-btn.loading {

@@ -8,7 +8,6 @@ export default function ChatPanel({
   activeConversationId = null,
   activeConversationTitle = '',
   onConversationCreated,
-  onNewChat,
   onToggleSidebar,
   onToggleDocPanel,
   docPanelOpen = false,

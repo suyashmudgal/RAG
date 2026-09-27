@@ -280,17 +280,36 @@
 
 /* ── KaTeX Math Formulae ────────────────────────────────────────────────── */
 
-.markdown-content .katex-display {
-  margin: 1.2em 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 8px 0;
-  max-width: 100%;
+.markdown-content .katex {
+  font-size: 1.08em;
+  text-rendering: auto;
+  color: var(--text-primary);
 }
 
-.markdown-content .katex {
-  font-size: 1.05em;
-  text-rendering: auto;
+.markdown-content .katex-display {
+  display: block;
+  margin: 1.25em 0;
+  text-align: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 10px 0;
+  max-width: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-light) transparent;
+}
+
+.markdown-content .katex-display::-webkit-scrollbar {
+  height: 4px;
+}
+
+.markdown-content .katex-display::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: var(--radius-full);
+}
+
+.markdown-content .katex-display > .katex {
+  display: inline-block;
+  text-align: initial;
 }
 
 /* ── Streaming Cursor ───────────────────────────────────────────────────── */

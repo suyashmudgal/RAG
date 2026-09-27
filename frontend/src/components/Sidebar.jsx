@@ -93,18 +93,12 @@ export default function Sidebar({
   // Knowledge Base dynamic status label
   const kbStatusText = useMemo(() => {
     if (processingCount > 0) {
-      if (documentCount > 0) {
-        return `${documentCount} indexed • ${processingCount} processing`;
-      }
       return `${processingCount} document${processingCount === 1 ? '' : 's'} processing`;
     }
     if (documentCount === 0) {
       return '0 documents';
     }
-    if (documentCount === 1) {
-      return '1 document indexed';
-    }
-    return `${documentCount} documents indexed`;
+    return `${documentCount} document${documentCount === 1 ? '' : 's'} indexed`;
   }, [documentCount, processingCount]);
 
   // Relative timestamp formatting
