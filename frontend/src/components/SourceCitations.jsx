@@ -22,7 +22,7 @@ export default function SourceCitations({ sources }) {
           </svg>
           <span className="citations-title">Verified Sources ({sources.length})</span>
         </div>
-        <span className="citations-hint">Citations from ChromaDB vector search</span>
+        <span className="citations-hint">Matched passages from indexed documents</span>
       </div>
 
       <div className="citations-grid">

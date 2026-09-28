@@ -45,19 +45,11 @@
 }
 
 .sun-icon {
-  color: #fbbf24;
+  color: var(--warning);
 }
 
 .moon-icon {
-  color: #6366f1;
-}
-
-.theme-toggle-btn:hover .sun-icon {
-  transform: rotate(45deg);
-}
-
-.theme-toggle-btn:hover .moon-icon {
-  transform: rotate(-15deg);
+  color: var(--text-secondary);
 }
 
 .theme-toggle-label {

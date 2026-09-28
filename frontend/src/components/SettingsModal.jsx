@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
 import { updateProfile, changePassword } from '../api/client';
 import './SettingsModal.css';
 
 export default function SettingsModal({ isOpen = false, onClose, onLogout }) {
   const { user, updateUser } = useAuth();
-  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'security'
+  const { theme, setTheme } = useTheme();
+  const { addToast } = useToast();
+  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'security' | 'appearance'
 
   // Profile Form State
   const [name, setName] = useState('');
@@ -58,6 +62,7 @@ export default function SettingsModal({ isOpen = false, onClose, onLogout }) {
       const updated = await updateProfile({ name: trimmed });
       updateUser(updated);
       setProfileMsg({ type: 'success', text: 'Profile name updated successfully' });
+      addToast('Profile updated', 'success');
     } catch (err) {
       setProfileMsg({ type: 'error', text: err.message || 'Failed to update profile' });
     } finally {
@@ -86,6 +91,7 @@ export default function SettingsModal({ isOpen = false, onClose, onLogout }) {
       setPasswordMsg({ type: '', text: '' });
       await changePassword(currentPassword, newPassword);
       setPasswordMsg({ type: 'success', text: 'Password changed successfully' });
+      addToast('Password changed successfully', 'success');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -98,17 +104,29 @@ export default function SettingsModal({ isOpen = false, onClose, onLogout }) {
 
   const isOAuth = Boolean(user?.is_oauth);
 
+  const formatCreationDate = (isoString) => {
+    if (!isoString) return 'Active Member';
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    } catch {
+      return 'Active Member';
+    }
+  };
+
   return (
-    <div className="settings-modal-backdrop" onClick={onClose}>
-      <div className="settings-modal-container" onClick={(e) => e.stopPropagation()}>
+    <div className="settings-modal-backdrop" onClick={onClose} role="presentation">
+      <div
+        className="settings-modal-container"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-dialog-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Modal Header */}
         <div className="settings-modal-header">
           <div className="settings-header-title">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            <h2>Account Settings</h2>
+            <h2 id="settings-dialog-title">Account Settings</h2>
           </div>
           <button
             type="button"
@@ -121,29 +139,35 @@ export default function SettingsModal({ isOpen = false, onClose, onLogout }) {
         </div>
 
         {/* Modal Navigation Tabs */}
-        <div className="settings-modal-tabs">
+        <div className="settings-modal-tabs" role="tablist">
           <button
             type="button"
+            role="tab"
+            aria-selected={activeTab === 'profile'}
             className={`settings-tab-btn ${activeTab === 'profile' ? 'active' : ''}`}
             onClick={() => setActiveTab('profile')}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
-            </svg>
-            <span>Profile</span>
+            Profile
           </button>
 
           <button
             type="button"
+            role="tab"
+            aria-selected={activeTab === 'security'}
             className={`settings-tab-btn ${activeTab === 'security' ? 'active' : ''}`}
             onClick={() => setActiveTab('security')}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-            <span>Security</span>
+            Security
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'appearance'}
+            className={`settings-tab-btn ${activeTab === 'appearance' ? 'active' : ''}`}
+            onClick={() => setActiveTab('appearance')}
+          >
+            Appearance
           </button>
         </div>
 
@@ -179,9 +203,19 @@ export default function SettingsModal({ isOpen = false, onClose, onLogout }) {
                   disabled
                   readOnly
                 />
-                <span className="settings-helper-text">
-                  Your email address is permanent and cannot be changed.
-                </span>
+              </div>
+
+              <div className="settings-meta-summary">
+                <div className="meta-summary-row">
+                  <span className="meta-summary-label">Account Created</span>
+                  <span className="meta-summary-val">{formatCreationDate(user?.created_at)}</span>
+                </div>
+                <div className="meta-summary-row">
+                  <span className="meta-summary-label">Authentication</span>
+                  <span className="meta-summary-val">
+                    {isOAuth ? 'Google Single Sign-On' : 'Email & Password'}
+                  </span>
+                </div>
               </div>
 
               {profileMsg.text && (
@@ -208,7 +242,7 @@ export default function SettingsModal({ isOpen = false, onClose, onLogout }) {
               {isOAuth ? (
                 <div className="oauth-notice-box">
                   <div className="oauth-notice-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="12" cy="12" r="10" />
                       <line x1="12" y1="16" x2="12" y2="12" />
                       <line x1="12" y1="8" x2="12.01" y2="8" />
@@ -218,7 +252,7 @@ export default function SettingsModal({ isOpen = false, onClose, onLogout }) {
                     <h4>Google OAuth Account</h4>
                     <p>
                       Your account was authenticated using Google Single Sign-On.
-                      Password changes are managed directly in your Google Account security settings.
+                      Password changes are managed through your Google Account security settings.
                     </p>
                   </div>
                 </div>
@@ -246,7 +280,7 @@ export default function SettingsModal({ isOpen = false, onClose, onLogout }) {
                       className="settings-input"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="At least 6 characters"
+                      placeholder="Min 6 characters"
                       disabled={savingPassword}
                       required
                     />
@@ -278,16 +312,51 @@ export default function SettingsModal({ isOpen = false, onClose, onLogout }) {
                       className="settings-submit-btn"
                       disabled={savingPassword || !currentPassword || !newPassword}
                     >
-                      {savingPassword ? <span className="spinner-small" /> : 'Change Password'}
+                      {savingPassword ? <span className="spinner-small" /> : 'Update Password'}
                     </button>
                   </div>
                 </form>
               )}
             </div>
           )}
+
+          {/* APPEARANCE TAB */}
+          {activeTab === 'appearance' && (
+            <div className="settings-appearance-pane">
+              <span className="settings-label">Theme Mode</span>
+              <p className="settings-helper-text">
+                Select your preferred interface surface style.
+              </p>
+              <div className="theme-options-grid">
+                <button
+                  type="button"
+                  className={`theme-card-option ${theme === 'dark' ? 'active' : ''}`}
+                  onClick={() => setTheme('dark')}
+                >
+                  <div className="theme-preview-box dark-preview" />
+                  <div className="theme-option-text">
+                    <span className="theme-name">Dark (Obsidian)</span>
+                    <span className="theme-desc">Neutral charcoal and black</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`theme-card-option ${theme === 'light' ? 'active' : ''}`}
+                  onClick={() => setTheme('light')}
+                >
+                  <div className="theme-preview-box light-preview" />
+                  <div className="theme-option-text">
+                    <span className="theme-name">Light</span>
+                    <span className="theme-desc">Crisp architectural slate</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Modal Footer with Account Sign Out */}
+        {/* Modal Footer with Sign Out */}
         <div className="settings-modal-footer">
           <div className="footer-account-info">
             <span className="account-label">Logged in as <strong>{user?.email}</strong></span>
@@ -300,7 +369,7 @@ export default function SettingsModal({ isOpen = false, onClose, onLogout }) {
               if (onLogout) onLogout();
             }}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />

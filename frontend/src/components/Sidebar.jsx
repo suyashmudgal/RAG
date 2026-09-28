@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import ThemeToggle from './ThemeToggle';
 import { useAuth } from '../contexts/AuthContext';
 import './Sidebar.css';
@@ -20,6 +20,13 @@ export default function Sidebar({
   docPanelOpen = false,
   documentCount = 0,
   processingCount = 0,
+  isSelectionMode = false,
+  onToggleSelectionMode,
+  selectedConvIds = new Set(),
+  onToggleSelectConv,
+  onSelectAllConvs,
+  onClearSelection,
+  onRequestBulkDelete,
 }) {
   const { user } = useAuth();
 
@@ -34,25 +41,18 @@ export default function Sidebar({
   const [editTitle, setEditTitle] = useState('');
   const editInputRef = useRef(null);
 
-  // Delete confirmation
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-
   // Close menus on outside click or Escape
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         setOpenMenuId(null);
         setEditingId(null);
-        setConfirmDeleteId(null);
       }
     };
 
     const handleClickOutside = (e) => {
       if (!e.target.closest('.conv-menu-container') && !e.target.closest('.conv-menu-popover')) {
         setOpenMenuId(null);
-      }
-      if (!e.target.closest('.conv-delete-confirm') && !e.target.closest('.conv-item-action-btn')) {
-        setConfirmDeleteId(null);
       }
     };
 
@@ -72,7 +72,7 @@ export default function Sidebar({
     }
   }, [editingId]);
 
-  // Client-side instant search filter
+  // Instant search filter
   const filteredConversations = useMemo(() => {
     if (!searchQuery.trim()) return conversations;
     const q = searchQuery.toLowerCase();
@@ -89,17 +89,6 @@ export default function Sidebar({
   const recentList = useMemo(() => {
     return filteredConversations.filter((c) => !c.is_pinned);
   }, [filteredConversations]);
-
-  // Knowledge Base dynamic status label
-  const kbStatusText = useMemo(() => {
-    if (processingCount > 0) {
-      return `${processingCount} document${processingCount === 1 ? '' : 's'} processing`;
-    }
-    if (documentCount === 0) {
-      return '0 documents';
-    }
-    return `${documentCount} document${documentCount === 1 ? '' : 's'} indexed`;
-  }, [documentCount, processingCount]);
 
   // Relative timestamp formatting
   const formatTime = (isoString) => {
@@ -122,7 +111,7 @@ export default function Sidebar({
     }
   };
 
-  /* ── Inline Rename Handlers ── */
+  /* ── Inline Rename ── */
   const startRename = (conv, e) => {
     e.stopPropagation();
     setOpenMenuId(null);
@@ -149,7 +138,7 @@ export default function Sidebar({
     }
   };
 
-  /* ── Pin / Unpin Handlers ── */
+  /* ── Pin / Unpin ── */
   const handleTogglePin = async (conv, e) => {
     e.stopPropagation();
     setOpenMenuId(null);
@@ -158,52 +147,70 @@ export default function Sidebar({
     }
   };
 
-  /* ── Delete Handlers ── */
-  const handleDeleteClick = (convId, e) => {
+  /* ── Delete Single ── */
+  const handleDeleteSingle = (convId, e) => {
     e.stopPropagation();
     setOpenMenuId(null);
-    setConfirmDeleteId(convId);
-  };
-
-  const handleConfirmDelete = async (convId, e) => {
-    e.stopPropagation();
-    setConfirmDeleteId(null);
     if (onDeleteConversation) {
-      await onDeleteConversation(convId);
+      onDeleteConversation(convId);
     }
   };
 
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
 
+  const selectedCount = selectedConvIds?.size || 0;
+  const isAllSelected = filteredConversations.length > 0 && selectedCount === filteredConversations.length;
+
   const renderConversationRow = (conv) => {
     const isActive = conv.id === activeConversationId;
     const isEditing = editingId === conv.id;
     const isMenuOpen = openMenuId === conv.id;
-    const isConfirmingDelete = confirmDeleteId === conv.id;
+    const isSelected = selectedConvIds?.has(conv.id);
 
     return (
       <li
         key={conv.id}
-        className={`sidebar-chat-row ${isActive ? 'is-active' : ''} ${conv.is_pinned ? 'is-pinned' : ''}`}
+        className={`sidebar-chat-row ${isActive ? 'is-active' : ''} ${conv.is_pinned ? 'is-pinned' : ''} ${isSelected ? 'is-selected' : ''}`}
         onClick={() => {
-          if (!isEditing && onSelectConversation) {
+          if (isSelectionMode) {
+            onToggleSelectConv?.(conv.id);
+          } else if (!isEditing && onSelectConversation) {
             onSelectConversation(conv.id);
             if (onClose) onClose();
           }
         }}
         role="listitem"
       >
-        <div className="chat-row-icon">
-          {conv.is_pinned ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-              <path d="M16 12V4H17V2H7V4H8V12L5 15V17H11V22L12 23L13 22V17H19V15L16 12Z" />
-            </svg>
-          ) : (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-          )}
-        </div>
+        {/* Selection Checkbox (when in selection mode) */}
+        {isSelectionMode ? (
+          <div
+            className="chat-row-checkbox-wrap"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelectConv?.(conv.id);
+            }}
+          >
+            <div className={`chat-row-checkbox ${isSelected ? 'checked' : ''}`}>
+              {isSelected && (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="chat-row-icon">
+            {conv.is_pinned ? (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <path d="M16 12V4H17V2H7V4H8V12L5 15V17H11V22L12 23L13 22V17H19V15L16 12Z" />
+              </svg>
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            )}
+          </div>
+        )}
 
         {isEditing ? (
           <div className="chat-row-inline-edit" onClick={(e) => e.stopPropagation()}>
@@ -229,31 +236,8 @@ export default function Sidebar({
           </div>
         )}
 
-        {/* Delete Confirmation Overlay */}
-        {isConfirmingDelete ? (
-          <div className="conv-delete-confirm" onClick={(e) => e.stopPropagation()}>
-            <span className="confirm-text">Delete?</span>
-            <button
-              type="button"
-              className="confirm-yes-btn"
-              onClick={(e) => handleConfirmDelete(conv.id, e)}
-              title="Confirm Delete"
-            >
-              Yes
-            </button>
-            <button
-              type="button"
-              className="confirm-no-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                setConfirmDeleteId(null);
-              }}
-              title="Cancel"
-            >
-              ✕
-            </button>
-          </div>
-        ) : !isEditing && (
+        {/* Hover-only More Menu */}
+        {!isSelectionMode && !isEditing && (
           <div className="conv-menu-container" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
@@ -262,10 +246,10 @@ export default function Sidebar({
                 e.stopPropagation();
                 setOpenMenuId(isMenuOpen ? null : conv.id);
               }}
-              title="Conversation options"
+              title="More options"
               aria-label="Conversation options"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <circle cx="12" cy="5" r="2" />
                 <circle cx="12" cy="12" r="2" />
                 <circle cx="12" cy="19" r="2" />
@@ -297,7 +281,7 @@ export default function Sidebar({
                     <line x1="12" y1="17" x2="12" y2="22" />
                     <path d="M5 17h14v-2l-3-3V4h1V2H7v2h1v8l-3 3v2z" />
                   </svg>
-                  <span>{conv.is_pinned ? 'Unpin' : 'Pin to top'}</span>
+                  <span>{conv.is_pinned ? 'Unpin' : 'Pin'}</span>
                 </button>
 
                 <div className="conv-menu-divider" />
@@ -305,7 +289,7 @@ export default function Sidebar({
                 <button
                   type="button"
                   className="conv-menu-item delete-item"
-                  onClick={(e) => handleDeleteClick(conv.id, e)}
+                  onClick={(e) => handleDeleteSingle(conv.id, e)}
                   role="menuitem"
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -327,11 +311,11 @@ export default function Sidebar({
       {isOpen && <div className="sidebar-mobile-backdrop" onClick={onClose} />}
 
       <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`} aria-label="Chat conversations navigation">
-        {/* Brand & Workspace Title */}
+        {/* Brand Bar */}
         <div className="sidebar-top-bar">
           <div className="sidebar-brand-lockup">
             <div className="sidebar-brand-glyph">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
                 <line x1="16" y1="13" x2="8" y2="13" />
@@ -339,21 +323,33 @@ export default function Sidebar({
               </svg>
             </div>
             <div className="sidebar-brand-meta">
-              <span className="sidebar-brand-name">DocChat AI</span>
-              <span className="sidebar-brand-badge">PRO WORKSPACE</span>
+              <span className="sidebar-brand-name">DocChat</span>
             </div>
           </div>
 
-          {onClose && (
-            <button
-              type="button"
-              className="sidebar-close-btn-mobile"
-              onClick={onClose}
-              aria-label="Close sidebar"
-            >
-              ✕
-            </button>
-          )}
+          <div className="sidebar-top-actions">
+            {onToggleSelectionMode && conversations.length > 0 && (
+              <button
+                type="button"
+                className={`sidebar-mode-toggle-btn ${isSelectionMode ? 'active' : ''}`}
+                onClick={onToggleSelectionMode}
+                title={isSelectionMode ? 'Exit selection mode' : 'Select multiple chats'}
+              >
+                {isSelectionMode ? 'Done' : 'Select'}
+              </button>
+            )}
+
+            {onClose && (
+              <button
+                type="button"
+                className="sidebar-close-btn-mobile"
+                onClick={onClose}
+                aria-label="Close sidebar"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Action: + New Chat */}
@@ -367,7 +363,7 @@ export default function Sidebar({
             }}
             title="Start new conversation (Ctrl+K)"
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
@@ -376,17 +372,17 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* Instant Search Bar */}
+        {/* Search Bar */}
         <div className="sidebar-search-container">
           <div className="sidebar-search-box">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <input
               type="text"
               className="sidebar-search-input"
-              placeholder="Search conversations…"
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               aria-label="Search conversations"
@@ -404,11 +400,51 @@ export default function Sidebar({
           </div>
         </div>
 
+        {/* Multi-Select Action Bar (Active when in selection mode) */}
+        {isSelectionMode && (
+          <div className="sidebar-selection-action-bar">
+            <div className="selection-bar-header">
+              <span className="selection-count-badge">
+                {selectedCount} selected
+              </span>
+              <div className="selection-bar-actions">
+                <button
+                  type="button"
+                  className="selection-btn text-btn"
+                  onClick={isAllSelected ? onClearSelection : onSelectAllConvs}
+                >
+                  {isAllSelected ? 'Deselect all' : 'Select all'}
+                </button>
+                <button
+                  type="button"
+                  className="selection-btn text-btn"
+                  onClick={onToggleSelectionMode}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+            {selectedCount > 0 && (
+              <button
+                type="button"
+                className="selection-delete-btn"
+                onClick={onRequestBulkDelete}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                <span>Delete {selectedCount > 1 ? `(${selectedCount})` : ''}</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Scrollable Conversation List */}
         <div className="sidebar-threads-scroll">
           {loadingConversations ? (
             <div className="sidebar-skeleton-stack" aria-label="Loading conversations">
-              {[1, 2, 3, 4, 5].map((i) => (
+              {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="sidebar-skeleton-row skeleton-shimmer">
                   <div className="skeleton-line medium" style={{ marginBottom: '6px' }} />
                   <div className="skeleton-line short" style={{ marginBottom: '0' }} />
@@ -418,17 +454,9 @@ export default function Sidebar({
           ) : filteredConversations.length === 0 ? (
             <div className="sidebar-empty-threads">
               {searchQuery ? (
-                <>
-                  <div className="empty-search-icon">🔍</div>
-                  <p className="empty-search-title">No conversations found</p>
-                  <p className="empty-search-sub">No chats match &ldquo;{searchQuery}&rdquo;</p>
-                </>
+                <p className="empty-sub">No conversations match &ldquo;{searchQuery}&rdquo;</p>
               ) : (
-                <>
-                  <div className="empty-search-icon">💬</div>
-                  <p className="empty-search-title">No conversations yet</p>
-                  <p className="empty-search-sub">Click &ldquo;New Chat&rdquo; to start querying your knowledge base.</p>
-                </>
+                <p className="empty-sub">No conversations yet.</p>
               )}
             </div>
           ) : (
@@ -437,8 +465,8 @@ export default function Sidebar({
               {pinnedList.length > 0 && (
                 <div className="sidebar-section-group">
                   <div className="sidebar-section-header">
-                    <span className="sidebar-section-label">PINNED</span>
-                    <span className="sidebar-section-badge">{pinnedList.length}</span>
+                    <span className="sidebar-section-label">Pinned</span>
+                    <span className="sidebar-section-count">{pinnedList.length}</span>
                   </div>
                   <ul className="sidebar-threads-list" role="list">
                     {pinnedList.map(renderConversationRow)}
@@ -449,11 +477,11 @@ export default function Sidebar({
               {/* RECENT SECTION */}
               <div className="sidebar-section-group">
                 <div className="sidebar-section-header">
-                  <span className="sidebar-section-label">RECENT</span>
-                  <span className="sidebar-section-badge">{recentList.length}</span>
+                  <span className="sidebar-section-label">Recent</span>
+                  <span className="sidebar-section-count">{recentList.length}</span>
                 </div>
                 {recentList.length === 0 && pinnedList.length > 0 ? (
-                  <p className="sidebar-section-empty">All conversations are pinned</p>
+                  <p className="sidebar-section-empty">All conversations pinned</p>
                 ) : (
                   <ul className="sidebar-threads-list" role="list">
                     {recentList.map(renderConversationRow)}
@@ -464,46 +492,41 @@ export default function Sidebar({
           )}
         </div>
 
-        {/* Knowledge Base Control (lower portion) */}
+        {/* Knowledge Base Toggle Control */}
         <div className="sidebar-kb-control-container">
           <button
             type="button"
             className={`sidebar-kb-control-btn ${docPanelOpen ? 'active' : ''}`}
-            onClick={() => {
-              if (onToggleDocPanel) onToggleDocPanel();
-            }}
-            title={docPanelOpen ? 'Close Knowledge Base panel' : 'Open Knowledge Base panel'}
+            onClick={() => onToggleDocPanel?.()}
+            title={docPanelOpen ? 'Close Knowledge Base' : 'Open Knowledge Base'}
             aria-label="Toggle Knowledge Base panel"
           >
             <div className="sidebar-kb-left">
-              <div className="sidebar-kb-icon-wrap">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                </svg>
-              </div>
-              <div className="sidebar-kb-meta">
-                <span className="sidebar-kb-title">Knowledge Base</span>
-                <div className="sidebar-kb-status">
-                  <span className={`sidebar-kb-dot ${processingCount > 0 ? 'processing' : documentCount > 0 ? 'ready' : 'empty'}`} />
-                  <span className="sidebar-kb-text">{kbStatusText}</span>
-                </div>
-              </div>
-            </div>
-            <div className="sidebar-kb-arrow">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6" />
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
               </svg>
+              <span className="sidebar-kb-title">Knowledge Base</span>
+            </div>
+            <div className="sidebar-kb-badge-wrap">
+              {processingCount > 0 ? (
+                <span className="sidebar-kb-badge processing">
+                  <span className="pulse-dot" />
+                  <span>{processingCount}</span>
+                </span>
+              ) : documentCount > 0 ? (
+                <span className="sidebar-kb-badge ready">{documentCount}</span>
+              ) : null}
             </div>
           </button>
         </div>
 
-        {/* User Account & Footer Controls */}
+        {/* Account Row */}
         <div className="sidebar-footer-account">
           <div
             className="sidebar-account-card"
             onClick={onOpenSettings}
-            title="Account settings & profile"
+            title="Settings & Profile"
             role="button"
             tabIndex={0}
             onKeyDown={(e) => {
@@ -518,12 +541,6 @@ export default function Sidebar({
               <span className="sidebar-account-name">{user?.name || 'User'}</span>
               <span className="sidebar-account-email">{user?.email || ''}</span>
             </div>
-            <div className="sidebar-account-gear" title="Settings">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-            </div>
           </div>
 
           <div className="sidebar-footer-controls">
@@ -532,7 +549,7 @@ export default function Sidebar({
               type="button"
               className="sidebar-signout-btn"
               onClick={onSignOut}
-              title="Sign out of your session"
+              title="Sign out"
               aria-label="Sign out"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

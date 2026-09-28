@@ -4,10 +4,13 @@ import Sidebar from '../components/Sidebar';
 import ChatPanel from '../components/ChatPanel';
 import DocumentContextPanel from '../components/DocumentContextPanel';
 import SettingsModal from '../components/SettingsModal';
+import BulkDeleteModal from '../components/BulkDeleteModal';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import {
   getConversations,
   deleteConversation,
+  deleteConversationsBulk,
   renameConversation,
   pinConversation,
   getDocuments,
@@ -20,6 +23,7 @@ import './ChatApp.css';
 
 export default function ChatApp() {
   const { logout } = useAuth();
+  const { addToast } = useToast();
   const navigate = useNavigate();
 
   // Mobile navigation drawers
@@ -28,16 +32,21 @@ export default function ChatApp() {
 
   // Right-hand Document Knowledge Base panel
   const [docPanelOpen, setDocPanelOpen] = useState(() => {
-    // Open by default on wide desktop displays (>= 1280px)
     return window.innerWidth >= 1280;
   });
 
-  // Conversations state & in-memory cache
+  // Conversations state
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(() => {
     return localStorage.getItem('active_conversation_id') || null;
   });
   const [loadingConversations, setLoadingConversations] = useState(false);
+
+  // Multi-select conversations state
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedConvIds, setSelectedConvIds] = useState(new Set());
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Documents state & live processing queue
   const [documents, setDocuments] = useState([]);
@@ -49,7 +58,7 @@ export default function ChatApp() {
   const [processingDocs, setProcessingDocs] = useState({});
   const pollingTimersRef = useRef({});
 
-  /* ── 1. Fetch Conversations with lean loading ── */
+  /* ── 1. Fetch Conversations ── */
   const loadConversations = useCallback(async () => {
     try {
       setLoadingConversations(true);
@@ -83,7 +92,6 @@ export default function ChatApp() {
       const docList = data.documents || [];
       setDocuments(docList);
 
-      // Inspect any active processing status on server
       docList.forEach((d) => {
         const stage = d.processing_stage || d.status;
         const isTerminal = stage === 'COMPLETED' || stage === 'FAILED' || stage === 'processed';
@@ -97,7 +105,7 @@ export default function ChatApp() {
                 filename: d.filename,
                 processing_stage: stage || 'QUEUED',
                 progress: d.progress || 25,
-                message: d.message || 'Processing on server…',
+                message: d.message || 'Processing document…',
                 chunk_count: d.chunk_count || 0,
                 processed_chunks: d.processed_chunks || 0,
                 error: null,
@@ -117,7 +125,7 @@ export default function ChatApp() {
     fetchDocs();
   }, [fetchDocs]);
 
-  /* ── 3. Status Polling Manager (Decoupled per document) ── */
+  /* ── 3. Status Polling Manager ── */
   const pollDocumentStatus = useCallback(
     async (docId) => {
       try {
@@ -141,6 +149,7 @@ export default function ChatApp() {
             clearTimeout(pollingTimersRef.current[docId]);
             delete pollingTimersRef.current[docId];
           }
+          addToast(`Document "${statusData.filename || 'Document'}" ready`, 'success');
           await fetchDocs();
           return;
         }
@@ -150,25 +159,23 @@ export default function ChatApp() {
             clearTimeout(pollingTimersRef.current[docId]);
             delete pollingTimersRef.current[docId];
           }
+          addToast(`Processing failed for "${statusData.filename || 'Document'}"`, 'error');
           return;
         }
 
-        // Schedule next poll in 750ms
         pollingTimersRef.current[docId] = setTimeout(() => {
           pollDocumentStatus(docId);
         }, 750);
       } catch (err) {
         console.warn(`Transient status poll error for ${docId}:`, err);
-        // Retry gracefully without spamming
         pollingTimersRef.current[docId] = setTimeout(() => {
           pollDocumentStatus(docId);
         }, 1500);
       }
     },
-    [fetchDocs]
+    [fetchDocs, addToast]
   );
 
-  // Monitor processing queue and trigger polling for untracked jobs
   useEffect(() => {
     Object.entries(processingDocs).forEach(([docId, doc]) => {
       const stage = doc.processing_stage || doc.status;
@@ -179,7 +186,6 @@ export default function ChatApp() {
     });
   }, [processingDocs, pollDocumentStatus]);
 
-  // Clean up all timers on unmount
   useEffect(() => {
     return () => {
       const timers = pollingTimersRef.current;
@@ -190,6 +196,7 @@ export default function ChatApp() {
   /* ── 4. Upload & Processing Queues ── */
   const handleFilesQueued = (newJobs) => {
     setDocPanelOpen(true);
+    addToast(`Uploaded ${newJobs.length} document${newJobs.length > 1 ? 's' : ''}`, 'info');
     setProcessingDocs((prev) => {
       const updated = { ...prev };
       newJobs.forEach((job) => {
@@ -199,7 +206,7 @@ export default function ChatApp() {
             document_id: id,
             filename: job.filename,
             processing_stage: job.processing_stage || job.status || 'UPLOADED',
-            progress: job.progress ?? 25,
+            progress: job.progress ?? 20,
             message: job.message || 'Uploaded to server',
             chunk_count: job.chunk_count || 0,
             processed_chunks: job.processed_chunks || 0,
@@ -229,8 +236,9 @@ export default function ChatApp() {
     setDownloadingDoc(doc.document_id);
     try {
       await downloadDocumentFile(doc.document_id, doc.filename);
+      addToast(`Downloaded ${doc.filename}`, 'success');
     } catch (err) {
-      alert(`Download failed: ${err.message}`);
+      addToast(`Download failed: ${err.message}`, 'error');
     } finally {
       setDownloadingDoc(null);
     }
@@ -243,9 +251,11 @@ export default function ChatApp() {
     setDocuments((prev) => prev.filter((d) => d.document_id !== docId));
     try {
       await deleteDocument(docId);
+      addToast('Document deleted', 'success');
       await fetchDocs();
     } catch (err) {
       setDocuments(previousDocs);
+      addToast(`Delete failed: ${err.message}`, 'error');
       throw err;
     } finally {
       setDeletingDoc(null);
@@ -263,7 +273,6 @@ export default function ChatApp() {
     localStorage.removeItem('active_conversation_id');
   }, []);
 
-  // Global Ctrl+K / Cmd+K listener
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -275,24 +284,21 @@ export default function ChatApp() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleNewChat]);
 
-  // Rename conversation
   const handleRenameConversation = async (convId, newTitle) => {
-    // Optimistic local update
     setConversations((prev) =>
       prev.map((c) => (c.id === convId ? { ...c, title: newTitle, is_custom_title: true } : c))
     );
     try {
       await renameConversation(convId, newTitle);
+      addToast('Chat renamed', 'success');
     } catch (err) {
       console.error('Rename conversation failed on backend:', err);
-      // Revert if error
+      addToast('Failed to rename chat', 'error');
       await loadConversations();
     }
   };
 
-  // Pin / Unpin conversation
   const handleTogglePinConversation = async (convId, nextPinned) => {
-    // Optimistic local update with pinned-first sort
     setConversations((prev) => {
       const updated = prev.map((c) => (c.id === convId ? { ...c, is_pinned: nextPinned } : c));
       return updated.sort((a, b) => {
@@ -311,7 +317,6 @@ export default function ChatApp() {
     }
   };
 
-  // Delete conversation
   const handleDeleteConversation = async (convId) => {
     const previous = conversations;
     setConversations((prev) => prev.filter((c) => c.id !== convId));
@@ -320,9 +325,58 @@ export default function ChatApp() {
     }
     try {
       await deleteConversation(convId);
+      addToast('Chat deleted', 'success');
     } catch (err) {
       setConversations(previous);
-      alert(`Delete conversation failed: ${err.message}`);
+      addToast(`Delete failed: ${err.message}`, 'error');
+    }
+  };
+
+  /* ── 7. Multi-Select Handlers ── */
+  const handleToggleSelectionMode = () => {
+    setIsSelectionMode((prev) => {
+      if (prev) {
+        setSelectedConvIds(new Set());
+      }
+      return !prev;
+    });
+  };
+
+  const handleToggleSelectConv = (id) => {
+    setSelectedConvIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAllConvs = () => {
+    setSelectedConvIds(new Set(conversations.map((c) => c.id)));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedConvIds(new Set());
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    const ids = Array.from(selectedConvIds);
+    if (ids.length === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      await deleteConversationsBulk(ids);
+      setConversations((prev) => prev.filter((c) => !selectedConvIds.has(c.id)));
+      if (selectedConvIds.has(activeConversationId)) {
+        handleNewChat();
+      }
+      addToast(`Deleted ${ids.length} conversation${ids.length > 1 ? 's' : ''}`, 'success');
+      setSelectedConvIds(new Set());
+      setIsSelectionMode(false);
+      setBulkDeleteModalOpen(false);
+    } catch (err) {
+      addToast(err.message || 'Failed to delete conversations', 'error');
+    } finally {
+      setIsBulkDeleting(false);
     }
   };
 
@@ -333,7 +387,6 @@ export default function ChatApp() {
   };
 
   const handleSignOut = async () => {
-    // Clean up all polling timers immediately
     const timers = pollingTimersRef.current;
     Object.values(timers).forEach(clearTimeout);
     pollingTimersRef.current = {};
@@ -353,7 +406,6 @@ export default function ChatApp() {
     ).length;
   }, [processingDocs]);
 
-  // Compute strictly completed/indexed documents (excluding documents currently processing or failed)
   const indexedDocCount = useMemo(() => {
     return documents.filter((d) => {
       const activeJob = processingDocs[d.document_id];
@@ -371,7 +423,7 @@ export default function ChatApp() {
 
   return (
     <div className="app-container">
-      {/* 3-Column Modern AI Workspace */}
+      {/* 3-Column Workspace */}
       <div className="app-workspace-layout">
         {/* Left: Conversations Sidebar */}
         <Sidebar
@@ -391,9 +443,16 @@ export default function ChatApp() {
           docPanelOpen={docPanelOpen}
           documentCount={indexedDocCount}
           processingCount={activeProcessingCount}
+          isSelectionMode={isSelectionMode}
+          onToggleSelectionMode={handleToggleSelectionMode}
+          selectedConvIds={selectedConvIds}
+          onToggleSelectConv={handleToggleSelectConv}
+          onSelectAllConvs={handleSelectAllConvs}
+          onClearSelection={handleClearSelection}
+          onRequestBulkDelete={() => setBulkDeleteModalOpen(true)}
         />
 
-        {/* Center: AI Chat Workspace Canvas */}
+        {/* Center: Main Chat Canvas */}
         <ChatPanel
           activeConversationId={activeConversationId}
           activeConversationTitle={activeConv?.title || ''}
@@ -405,7 +464,7 @@ export default function ChatApp() {
           onOpenUpload={() => setDocPanelOpen(true)}
         />
 
-        {/* Right: Document Knowledge Base & Live Pipeline */}
+        {/* Right: Document Knowledge Base Panel */}
         <DocumentContextPanel
           isOpen={docPanelOpen}
           onClose={() => setDocPanelOpen(false)}
@@ -421,6 +480,15 @@ export default function ChatApp() {
           downloadingDoc={downloadingDoc}
         />
       </div>
+
+      {/* Bulk Delete Confirmation Modal */}
+      <BulkDeleteModal
+        isOpen={bulkDeleteModalOpen}
+        count={selectedConvIds.size}
+        isDeleting={isBulkDeleting}
+        onConfirm={handleConfirmBulkDelete}
+        onCancel={() => setBulkDeleteModalOpen(false)}
+      />
 
       {/* Account & Profile Settings Modal */}
       <SettingsModal

@@ -125,10 +125,10 @@ const CodeBlock = memo(function CodeBlock({ language, code }) {
           customStyle={{
             margin: 0,
             padding: '14px 16px',
-            background: '#0d0d18',
-            fontSize: '13.5px',
+            background: '#09090b',
+            fontSize: '13px',
             lineHeight: 1.6,
-            borderRadius: '0 0 var(--radius-md) var(--radius-md)',
+            borderRadius: '0 0 var(--radius-sm) var(--radius-sm)',
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
           }}
           wrapLongLines={true}

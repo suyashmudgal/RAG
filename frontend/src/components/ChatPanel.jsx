@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import MessageBubble from './MessageBubble';
 import { streamMessage, getConversation, exportConversationPdf, renameConversation } from '../api/client';
 import './ChatPanel.css';
@@ -30,7 +29,7 @@ export default function ChatPanel({
   const [headerTitle, setHeaderTitle] = useState('');
   const headerInputRef = useRef(null);
 
-  // In-memory conversation messages cache: { [convId]: messagesArray }
+  // In-memory conversation messages cache
   const messageCacheRef = useRef({});
   const inFlightFetchRef = useRef(null);
 
@@ -47,14 +46,12 @@ export default function ChatPanel({
       return;
     }
 
-    // Check in-memory cache first for instant 0ms switching
     if (messageCacheRef.current[activeConversationId]) {
       setMessages(messageCacheRef.current[activeConversationId]);
       setLoadingHistory(false);
       return;
     }
 
-    // Otherwise fetch with skeleton placeholder
     setLoadingHistory(true);
     inFlightFetchRef.current = activeConversationId;
 
@@ -90,7 +87,6 @@ export default function ChatPanel({
     setUserScrolledUp(!nearBottom && messages.length > 0);
   };
 
-  // Auto-scroll follow
   useEffect(() => {
     if (isNearBottomRef.current && bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' });
@@ -123,7 +119,6 @@ export default function ChatPanel({
         inputRef.current.style.height = 'auto';
       }
 
-      // Optimistically append user message and placeholder assistant message
       const userMsg = { role: 'user', content: question };
       const assistantMsg = { role: 'assistant', content: '', isStreaming: true, sources: [] };
 
@@ -146,7 +141,6 @@ export default function ChatPanel({
           last.content += buffered;
           copy[copy.length - 1] = last;
 
-          // Update cache
           if (activeConversationId) {
             messageCacheRef.current[activeConversationId] = copy;
           }
@@ -158,14 +152,12 @@ export default function ChatPanel({
       await streamMessage(
         question,
         activeConversationId,
-        /* onToken */
         (token) => {
           tokenBuffer += token;
           if (!rafId) {
             rafId = requestAnimationFrame(flushTokens);
           }
         },
-        /* onSources */
         (sources) => {
           if (rafId) {
             cancelAnimationFrame(rafId);
@@ -183,8 +175,7 @@ export default function ChatPanel({
             return copy;
           });
         },
-        /* onError */
-        (error) => {
+        (errorMsg) => {
           if (rafId) {
             cancelAnimationFrame(rafId);
             flushTokens();
@@ -192,9 +183,11 @@ export default function ChatPanel({
           setMessages((prev) => {
             const copy = [...prev];
             const last = { ...copy[copy.length - 1] };
-            if (!last.content) last.content = `⚠️ ${error}`;
-            last.isError = true;
+            last.content = last.content
+              ? `${last.content}\n\n⚠️ Error: ${errorMsg}`
+              : `⚠️ Error: ${errorMsg}`;
             last.isStreaming = false;
+            last.isError = true;
             copy[copy.length - 1] = last;
 
             if (activeConversationId) {
@@ -204,7 +197,6 @@ export default function ChatPanel({
           });
           setIsStreaming(false);
         },
-        /* onDone */
         (resolvedConvId) => {
           if (rafId) {
             cancelAnimationFrame(rafId);
@@ -216,21 +208,20 @@ export default function ChatPanel({
             last.isStreaming = false;
             copy[copy.length - 1] = last;
 
-            const finalId = resolvedConvId || activeConversationId;
-            if (finalId) {
-              messageCacheRef.current[finalId] = copy;
+            if (resolvedConvId) {
+              messageCacheRef.current[resolvedConvId] = copy;
             }
             return copy;
           });
           setIsStreaming(false);
 
-          if (resolvedConvId && onConversationCreated) {
+          if (!activeConversationId && resolvedConvId && onConversationCreated) {
             onConversationCreated(resolvedConvId);
           }
         }
       );
     },
-    [input, isStreaming, activeConversationId, messages, onConversationCreated]
+    [input, isStreaming, messages, activeConversationId, onConversationCreated]
   );
 
   const onKeyDown = (e) => {
@@ -240,22 +231,47 @@ export default function ChatPanel({
     }
   };
 
-  /* ── Save Chat as PDF ── */
+  /* ── Header Title Inline Rename ── */
+  const handleStartHeaderRename = () => {
+    if (!activeConversationId) return;
+    setHeaderTitle(activeConversationTitle || 'New Conversation');
+    setIsRenamingHeader(true);
+    setTimeout(() => {
+      headerInputRef.current?.focus();
+      headerInputRef.current?.select();
+    }, 40);
+  };
+
+  const handleSaveHeaderRename = async () => {
+    setIsRenamingHeader(false);
+    const trimmed = headerTitle.trim();
+    if (!trimmed || trimmed === activeConversationTitle) return;
+    try {
+      await renameConversation(activeConversationId, trimmed);
+      if (onConversationCreated) {
+        onConversationCreated(activeConversationId);
+      }
+    } catch (err) {
+      console.error('Failed to rename from header:', err);
+    }
+  };
+
+  /* ── PDF Export ── */
   const handleExportPdf = async () => {
     if (!activeConversationId || exportingPdf) return;
-    setExportingPdf(true);
-    setPdfError('');
-    setPdfSuccess(false);
-
     try {
-      const safeTitle = (activeConversationTitle || 'Conversation')
-        .replace(/[^a-zA-Z0-9_\- ]/g, '')
-        .trim();
-      await exportConversationPdf(activeConversationId, `${safeTitle || 'conversation'}.pdf`);
+      setExportingPdf(true);
+      setPdfError('');
+      setPdfSuccess(false);
+
+      const title = activeConversationTitle || 'Conversation';
+      const safeTitle = title.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
+      const filename = `${safeTitle}_DocChat.pdf`;
+
+      await exportConversationPdf(activeConversationId, filename);
       setPdfSuccess(true);
-      setTimeout(() => setPdfSuccess(false), 3000);
+      setTimeout(() => setPdfSuccess(false), 2500);
     } catch (err) {
-      console.error('PDF export failed:', err);
       setPdfError(err.message || 'Export failed');
       setTimeout(() => setPdfError(''), 4000);
     } finally {
@@ -263,35 +279,9 @@ export default function ChatPanel({
     }
   };
 
-  /* ── Header Inline Rename ── */
-  const startHeaderRename = () => {
-    if (!activeConversationId) return;
-    setHeaderTitle(activeConversationTitle || 'New Conversation');
-    setIsRenamingHeader(true);
-    setTimeout(() => {
-      headerInputRef.current?.focus();
-      headerInputRef.current?.select();
-    }, 50);
-  };
-
-  const handleSaveHeaderRename = async () => {
-    const trimmed = headerTitle.trim();
-    setIsRenamingHeader(false);
-    if (!trimmed || trimmed === activeConversationTitle) return;
-
-    try {
-      await renameConversation(activeConversationId, trimmed);
-      if (onConversationCreated) {
-        onConversationCreated(activeConversationId);
-      }
-    } catch (err) {
-      console.error('Failed to rename conversation:', err);
-    }
-  };
-
   return (
-    <main className="chat-panel" role="main">
-      {/* ── Top Header ── */}
+    <main className="chat-panel" role="main" aria-label="Chat Conversation Canvas">
+      {/* ── Compact Header ── */}
       <header className="chat-header">
         <div className="chat-header-left">
           {onToggleSidebar && (
@@ -299,10 +289,10 @@ export default function ChatPanel({
               type="button"
               className="chat-mobile-toggle-btn"
               onClick={onToggleSidebar}
-              title="Toggle sidebar"
-              aria-label="Toggle sidebar navigation"
+              title="Toggle Sidebar"
+              aria-label="Toggle Sidebar"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="3" y1="12" x2="21" y2="12" />
                 <line x1="3" y1="6" x2="21" y2="6" />
                 <line x1="3" y1="18" x2="21" y2="18" />
@@ -310,15 +300,6 @@ export default function ChatPanel({
             </button>
           )}
 
-          <Link to="/" className="chat-home-nav-link" title="Back to Landing Page">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="19" y1="12" x2="5" y2="12" />
-              <polyline points="12 19 5 12 12 5" />
-            </svg>
-            <span>Landing</span>
-          </Link>
-
-          {/* Conversation Title */}
           <div className="chat-title-container">
             {isRenamingHeader ? (
               <input
@@ -332,16 +313,16 @@ export default function ChatPanel({
                   if (e.key === 'Enter') handleSaveHeaderRename();
                   if (e.key === 'Escape') setIsRenamingHeader(false);
                 }}
-                aria-label="Rename conversation title"
+                aria-label="Edit conversation title"
               />
             ) : (
               <div
                 className="chat-title-interactive"
-                onClick={activeConversationId ? startHeaderRename : undefined}
-                title={activeConversationId ? 'Click to rename' : ''}
+                onClick={handleStartHeaderRename}
+                title={activeConversationId ? 'Click to rename conversation' : ''}
               >
                 <h1 className="chat-title-text">
-                  {activeConversationTitle || 'New Conversation'}
+                  {activeConversationTitle || (activeConversationId ? 'Conversation' : 'New Chat')}
                 </h1>
                 {activeConversationId && (
                   <svg className="chat-rename-hint-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -362,30 +343,30 @@ export default function ChatPanel({
               className={`chat-header-action-btn pdf-btn ${exportingPdf ? 'loading' : ''} ${pdfSuccess ? 'success' : ''}`}
               onClick={handleExportPdf}
               disabled={exportingPdf}
-              title="Save conversation as formatted PDF"
+              title="Save conversation as PDF"
               aria-label="Save conversation as PDF"
             >
               {exportingPdf ? (
                 <>
                   <span className="spinner-small" />
-                  <span className="btn-label-desktop">Preparing PDF…</span>
+                  <span className="btn-label-desktop">Exporting…</span>
                 </>
               ) : pdfSuccess ? (
                 <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
-                  <span className="btn-label-desktop">PDF saved</span>
+                  <span className="btn-label-desktop">Saved</span>
                 </>
               ) : (
                 <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <polyline points="14 2 14 8 20 8" />
                     <line x1="12" y1="18" x2="12" y2="12" />
                     <line x1="9" y1="15" x2="15" y2="15" />
                   </svg>
-                  <span className="btn-label-desktop">Save as PDF</span>
+                  <span className="btn-label-desktop">Save PDF</span>
                 </>
               )}
             </button>
@@ -399,14 +380,17 @@ export default function ChatPanel({
               type="button"
               className={`chat-header-action-btn doc-panel-toggle-btn ${docPanelOpen ? 'active' : ''}`}
               onClick={onToggleDocPanel}
-              title={docPanelOpen ? 'Close Knowledge Base panel' : 'Open Knowledge Base panel'}
-              aria-label="Toggle Document Knowledge Base"
+              title={docPanelOpen ? 'Close Knowledge Base' : 'Open Knowledge Base'}
+              aria-label="Toggle Knowledge Base"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
                 <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
               </svg>
               <span className="btn-label-desktop">Knowledge Base</span>
+              {indexedDocCount > 0 && (
+                <span className="header-doc-count-pill">{indexedDocCount}</span>
+              )}
             </button>
           )}
         </div>
@@ -420,7 +404,6 @@ export default function ChatPanel({
       >
         <div className="messages-centered-column">
           {loadingHistory ? (
-            /* Skeleton Messages during thread switch */
             <div className="skeleton-chat-container" aria-label="Loading conversation history">
               <div className="skeleton-msg-row user">
                 <div className="skeleton-bubble user skeleton-shimmer">
@@ -428,41 +411,31 @@ export default function ChatPanel({
                 </div>
               </div>
               <div className="skeleton-msg-row assistant">
-                <div className="skeleton-avatar skeleton-shimmer" />
                 <div className="skeleton-bubble assistant skeleton-shimmer">
                   <div className="skeleton-line long" />
                   <div className="skeleton-line medium" />
                   <div className="skeleton-line short" />
                 </div>
               </div>
-              <div className="skeleton-msg-row user">
-                <div className="skeleton-bubble user skeleton-shimmer">
-                  <div className="skeleton-line short" />
-                </div>
-              </div>
             </div>
           ) : messages.length === 0 ? (
-            /* ── Clean Empty States ── */
+            /* ── Clean Restrained Empty States (No fake AI elements) ── */
             <div className="chat-empty-canvas">
               {indexedDocCount === 0 ? (
                 /* State 1: Clean empty state before any indexed document */
                 <div className="empty-canvas-hero">
-                  <div className="empty-orbital-container">
-                    <div className="orbital-ring ring-outer" />
-                    <div className="orbital-ring ring-middle" />
-                    <div className="orbital-core-glyph">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                        <polyline points="14 2 14 8 20 8" />
-                        <line x1="12" y1="18" x2="12" y2="12" />
-                        <line x1="9" y1="15" x2="15" y2="15" />
-                      </svg>
-                    </div>
+                  <div className="empty-icon-glyph">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="12" y1="18" x2="12" y2="12" />
+                      <line x1="9" y1="15" x2="15" y2="15" />
+                    </svg>
                   </div>
 
-                  <h2 className="empty-hero-headline">Upload a document to get started</h2>
+                  <h2 className="empty-hero-headline">Upload a document to start</h2>
                   <p className="empty-hero-description">
-                    Add a PDF, DOCX, or TXT to start asking questions.
+                    Upload a PDF, DOCX, or TXT document to begin asking questions.
                   </p>
 
                   <div className="empty-upload-cta-wrap">
@@ -473,43 +446,34 @@ export default function ChatPanel({
                         if (onOpenUpload) onOpenUpload();
                         else if (onToggleDocPanel) onToggleDocPanel();
                       }}
-                      aria-label="Upload Documents"
+                      aria-label="Upload document"
                     >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                         <polyline points="17 8 12 3 7 8" />
                         <line x1="12" y1="3" x2="12" y2="15" />
                       </svg>
-                      <span>Upload Documents</span>
+                      <span>Upload document</span>
                     </button>
                   </div>
                 </div>
               ) : (
                 /* State 2: Ready state after document is successfully indexed */
                 <div className="empty-canvas-hero ready-state">
-                  <div className="empty-orbital-container ready-orbital">
-                    <div className="orbital-ring ring-outer ring-ready" />
-                    <div className="orbital-core-glyph ready-glyph">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    </div>
+                  <div className="empty-icon-glyph ready-glyph">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
                   </div>
 
-                  <h2 className="empty-hero-headline">Your knowledge base is ready.</h2>
+                  <h2 className="empty-hero-headline">Your documents are ready.</h2>
                   <p className="empty-hero-description">
-                    Ask anything about your documents.
+                    Ask anything about your uploaded documents.
                   </p>
-
-                  <div className="empty-ready-badge">
-                    <span className="ready-status-dot" />
-                    <span>{indexedDocCount} document{indexedDocCount === 1 ? '' : 's'} indexed</span>
-                  </div>
                 </div>
               )}
             </div>
           ) : (
-            /* ── Message List ── */
             <div className="messages-thread-list">
               {messages.map((msg, idx) => (
                 <MessageBubble key={idx} message={msg} />
@@ -529,7 +493,7 @@ export default function ChatPanel({
           onClick={scrollToBottom}
           title="Jump to latest message"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="6 9 12 15 18 9" />
           </svg>
           <span>Latest message</span>
@@ -548,10 +512,10 @@ export default function ChatPanel({
               onKeyDown={onKeyDown}
               placeholder={
                 isStreaming
-                  ? 'Synthesizing response from verified documents…'
+                  ? 'Generating response…'
                   : indexedDocCount > 0
                   ? 'Ask anything about your documents…'
-                  : 'Ask anything or upload documents for grounded citations…'
+                  : 'Upload documents or ask a question…'
               }
               disabled={isStreaming}
               rows={1}
@@ -569,7 +533,7 @@ export default function ChatPanel({
               {isStreaming ? (
                 <span className="spinner-small" />
               ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="22" y1="2" x2="11" y2="13" />
                   <polygon points="22 2 15 22 11 13 2 9 22 2" />
                 </svg>
@@ -579,10 +543,7 @@ export default function ChatPanel({
 
           <div className="composer-footer-hints">
             <span className="composer-hint">
-              Press <strong>Enter</strong> to send • <strong>Shift + Enter</strong> for a new line
-            </span>
-            <span className="composer-security">
-              Grounded with verifiable page citations
+              Press <strong>Enter</strong> to send &bull; <strong>Shift + Enter</strong> for new line
             </span>
           </div>
         </div>

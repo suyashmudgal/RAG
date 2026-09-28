@@ -59,7 +59,7 @@ export default function MessageBubble({ message }) {
                   <span className="dot dot-3" />
                 </div>
                 <span className="thinking-status">
-                  Retrieving context from ChromaDB &amp; synthesizing answer…
+                  Searching knowledge base and synthesizing answer…
                 </span>
               </div>
             ) : (

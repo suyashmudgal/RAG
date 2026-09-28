@@ -66,55 +66,94 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="auth-page-container">
-      <div className="auth-glow-1" />
-      <div className="auth-glow-2" />
+    <div className="login-editorial-layout">
+      {/* Left Column: Editorial Brand Manifesto */}
+      <div className="login-editorial-aside">
+        <div className="editorial-top-brand">
+          <Link to="/" className="editorial-logo">
+            <span className="editorial-logo-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+            </span>
+            <span className="editorial-logo-text">DocChat</span>
+          </Link>
+        </div>
 
-      <div className="auth-card">
-        <div className="auth-card-top-bar">
-          <Link to="/" className="auth-back-mini">
-            ← Home
+        <div className="editorial-quote-wrap">
+          <h2 className="editorial-headline">
+            Grounded knowledge, retrieved with precision.
+          </h2>
+          <p className="editorial-subline">
+            Query documentation, specifications, and reports with verified page citations and zero hallucination retrieval.
+          </p>
+
+          <div className="editorial-features-list">
+            <div className="editorial-feature-item">
+              <span className="editorial-feature-bullet">&bull;</span>
+              <span>Semantic indexing with exact passage attribution</span>
+            </div>
+            <div className="editorial-feature-item">
+              <span className="editorial-feature-bullet">&bull;</span>
+              <span>Isolated, encrypted workspace storage</span>
+            </div>
+            <div className="editorial-feature-item">
+              <span className="editorial-feature-bullet">&bull;</span>
+              <span>Zero training on your private files</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="editorial-footer-note">
+          <span>Enterprise document intelligence</span>
+        </div>
+      </div>
+
+      {/* Right Column: Focused Sign In Form */}
+      <div className="login-form-pane">
+        <div className="login-top-bar">
+          <Link to="/" className="auth-back-link">
+            &larr; Back to home
           </Link>
           <ThemeToggle />
         </div>
 
-        <div className="auth-header">
-          <Link to="/" className="auth-logo-link">
-            <div className="auth-logo-badge">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-              </svg>
-            </div>
-            <span className="auth-logo-text">DocChat <span className="brand-highlight">AI</span></span>
-          </Link>
-          <h1 className="auth-title">Welcome back</h1>
-          <p className="auth-subtitle">Sign in to query your documents with citations</p>
-        </div>
-
-        {error && (
-          <div className="auth-error-banner" role="alert">
-            <span>⚠️</span>
-            <span>{error}</span>
+        <div className="login-form-card">
+          <div className="auth-header-block">
+            <h1 className="auth-main-title">Sign in</h1>
+            <p className="auth-main-subtitle">
+              Enter your credentials to access your workspace.
+            </p>
           </div>
-        )}
 
-        <div className="auth-social-section">
-          <GoogleSignInButton text="Continue with Google" />
-          <div className="auth-divider">
+          {error && (
+            <div className="auth-error-banner" role="alert">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div className="auth-oauth-wrap">
+            <GoogleSignInButton text="Continue with Google" />
+          </div>
+
+          <div className="auth-separator">
             <span>or sign in with email</span>
           </div>
-        </div>
 
-        <form className="auth-form" onSubmit={handleSubmit} noValidate>
-          <div className="auth-form-group">
-            <label htmlFor="login-email">Email Address</label>
-            <div className="auth-input-wrapper">
+          <form className="auth-form" onSubmit={handleSubmit} noValidate>
+            <div className="auth-input-group">
+              <label htmlFor="login-email">Email</label>
               <input
                 id="login-email"
                 type="email"
-                className="auth-input"
-                placeholder="name@example.com"
+                className="auth-input-field"
+                placeholder="name@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
@@ -122,53 +161,67 @@ export default function LoginPage() {
                 disabled={isSubmitting}
               />
             </div>
-          </div>
 
-          <div className="auth-form-group">
-            <label htmlFor="login-password">Password</label>
-            <div className="auth-input-wrapper">
-              <input
-                id="login-password"
-                type={showPassword ? 'text' : 'password'}
-                className="auth-input"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-                disabled={isSubmitting}
-              />
-              <button
-                type="button"
-                className="auth-toggle-pwd"
-                onClick={() => setShowPassword(!showPassword)}
-                title={showPassword ? 'Hide password' : 'Show password'}
-                tabIndex="-1"
-              >
-                {showPassword ? '👁️' : '👁️‍🗨️'}
-              </button>
+            <div className="auth-input-group">
+              <div className="auth-label-row">
+                <label htmlFor="login-password">Password</label>
+              </div>
+              <div className="auth-input-with-action">
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  className="auth-input-field"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                  disabled={isSubmitting}
+                />
+                <button
+                  type="button"
+                  className="auth-eye-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  tabIndex="-1"
+                >
+                  {showPassword ? (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
+
+            <button
+              type="submit"
+              className="auth-primary-submit-btn"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <span className="spinner-small" />
+                  <span>Signing in…</span>
+                </>
+              ) : (
+                'Sign In'
+              )}
+            </button>
+          </form>
+
+          <div className="auth-footer-prompt">
+            <span>Don&apos;t have an account?</span>{' '}
+            <Link to="/signup" className="auth-action-link">
+              Create an account
+            </Link>
           </div>
-
-          <button
-            type="submit"
-            className="auth-submit-btn"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <>
-                <span className="spinner-small" />
-                <span>Signing in…</span>
-              </>
-            ) : (
-              'Sign In'
-            )}
-          </button>
-        </form>
-
-        <div className="auth-footer">
-          Don&apos;t have an account?
-          <Link to="/signup">Create one</Link>
         </div>
       </div>
     </div>

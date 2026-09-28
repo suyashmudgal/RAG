@@ -205,6 +205,37 @@ export async function deleteConversation(conversationId) {
   return res.json();
 }
 
+export async function deleteConversationsBulk(conversationIds) {
+  if (!conversationIds || conversationIds.length === 0) return { success: true };
+  try {
+    const res = await fetch(`${API_BASE}/conversations/bulk`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ conversation_ids: conversationIds }),
+    });
+
+    if (res.ok) {
+      return res.json();
+    }
+
+    // Fallback if bulk endpoint is not yet defined on backend
+    if (res.status === 404 || res.status === 405) {
+      await Promise.all(conversationIds.map((id) => deleteConversation(id)));
+      return { success: true, count: conversationIds.length };
+    }
+
+    const err = await res.json().catch(() => ({ detail: 'Failed to delete conversations' }));
+    throw new Error(err.detail || 'Bulk delete failed');
+  } catch (err) {
+    if (err.message && (err.message.includes('404') || err.message.includes('Not Found'))) {
+      await Promise.all(conversationIds.map((id) => deleteConversation(id)));
+      return { success: true, count: conversationIds.length };
+    }
+    throw err;
+  }
+}
+
 export async function renameConversation(conversationId, title) {
   const res = await fetch(`${API_BASE}/conversations/${conversationId}`, {
     method: 'PATCH',

@@ -2,28 +2,18 @@ import React from 'react';
 import './DocumentProcessingCard.css';
 
 const STAGE_LABELS = {
-  QUEUED: 'Queued for processing',
-  UPLOADING: 'Uploading document',
-  UPLOADED: 'Uploaded to server',
-  EXTRACTING: 'Extracting document text',
-  PARSING: 'Parsing structure & pages',
-  CHUNKING: 'Creating semantic chunks',
-  EMBEDDING: 'Creating AI embeddings',
-  INDEXING: 'Indexing in ChromaDB',
-  FINALIZING: 'Finalizing vector store',
-  COMPLETED: 'Document ready to query',
-  FAILED: 'Ingestion failed',
+  QUEUED: 'Queued',
+  UPLOADING: 'Uploading',
+  UPLOADED: 'Uploaded',
+  EXTRACTING: 'Reading document',
+  PARSING: 'Understanding pages',
+  CHUNKING: 'Preparing knowledge',
+  EMBEDDING: 'Creating semantic index',
+  INDEXING: 'Building search index',
+  FINALIZING: 'Finishing',
+  COMPLETED: 'Ready',
+  FAILED: 'Failed',
 };
-
-const PIPELINE_STEPS = [
-  { key: 'UPLOADING', label: 'Upload', rank: 1 },
-  { key: 'EXTRACTING', label: 'Extract text', rank: 3 },
-  { key: 'PARSING', label: 'Parse pages', rank: 4 },
-  { key: 'CHUNKING', label: 'Semantic chunks', rank: 5 },
-  { key: 'EMBEDDING', label: 'AI embeddings', rank: 6 },
-  { key: 'INDEXING', label: 'Vector index', rank: 7 },
-  { key: 'FINALIZING', label: 'Finalize', rank: 8 },
-];
 
 const STAGE_RANKS = {
   QUEUED: 0,
@@ -39,7 +29,27 @@ const STAGE_RANKS = {
   FAILED: -1,
 };
 
-export default function DocumentProcessingCard({ doc, onDismiss }) {
+const PIPELINE_STEPS = [
+  { key: 'UPLOADING', label: 'Upload', rank: 1 },
+  { key: 'EXTRACTING', label: 'Read text', rank: 3 },
+  { key: 'PARSING', label: 'Pages', rank: 4 },
+  { key: 'CHUNKING', label: 'Knowledge', rank: 5 },
+  { key: 'EMBEDDING', label: 'Semantics', rank: 6 },
+  { key: 'INDEXING', label: 'Index', rank: 7 },
+  { key: 'FINALIZING', label: 'Finalize', rank: 8 },
+];
+
+function sanitizeErrorMessage(raw) {
+  if (!raw) return 'An error occurred during ingestion.';
+  // Strip backend tracebacks or raw python error names
+  const clean = raw.split('\n')[0]
+    .replace(/^Traceback.*$/i, '')
+    .replace(/^[A-Za-z]+Error:\s*/, '')
+    .trim();
+  return clean.length > 120 ? `${clean.slice(0, 117)}…` : clean || 'Could not process document';
+}
+
+export default function DocumentProcessingCard({ doc, onDismiss, onRetry }) {
   const {
     document_id,
     filename,
@@ -57,138 +67,149 @@ export default function DocumentProcessingCard({ doc, onDismiss }) {
   const isFailed = processing_stage === 'FAILED';
   const isCompleted = processing_stage === 'COMPLETED';
 
-  // Support both backend naming conventions
   const totalChunks = chunk_count || chunks_total || 0;
-  const doneChunks = processed_chunks || chunks_processed || 0;
-
   const ext = (filename || '').split('.').pop()?.toLowerCase();
-  const badgeClass = ext === 'pdf' ? 'tag-pdf' : ext === 'docx' ? 'tag-docx' : 'tag-txt';
+  const badgeLabel = ext ? ext.toUpperCase() : 'DOC';
 
-  return (
-    <div className={`doc-processing-card ${isFailed ? 'is-failed' : ''} ${isCompleted ? 'is-completed' : ''}`} role="region" aria-label={`Processing status for ${filename}`}>
-      {/* Header */}
-      <div className="proc-card-header">
-        <div className="proc-file-info">
-          <span className={`proc-ext-badge ${badgeClass}`}>
-            {ext ? ext.toUpperCase() : 'DOC'}
-          </span>
-          <span className="proc-filename" title={filename}>
-            {filename}
+  /* ── 1. COMPLETED: Compact document row (Req 17) ── */
+  if (isCompleted) {
+    return (
+      <div className="proc-compact-completed-row" role="region" aria-label={`${filename} is ready`}>
+        <div className="proc-completed-check">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
+        <div className="proc-compact-meta">
+          <span className="proc-compact-filename" title={filename}>{filename}</span>
+          <span className="proc-compact-sub">
+            {totalChunks > 0 ? `${totalChunks} chunks` : 'Indexed'} &bull; Ready
           </span>
         </div>
-        {onDismiss && (isFailed || isCompleted) && (
+        {onDismiss && (
           <button
             type="button"
-            className="proc-dismiss-btn"
+            className="proc-compact-dismiss-btn"
             onClick={() => onDismiss(document_id)}
-            title="Dismiss card"
-            aria-label={`Dismiss processing card for ${filename}`}
+            title="Dismiss notification"
+            aria-label="Dismiss"
           >
             ✕
           </button>
         )}
       </div>
+    );
+  }
 
-      {/* Main Status or Error Alert */}
-      {isFailed ? (
-        <div className="proc-error-banner" role="alert">
-          <div className="proc-error-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  /* ── 2. FAILED: Clean safe error card (Req 18) ── */
+  if (isFailed) {
+    const safeError = sanitizeErrorMessage(error || message);
+    return (
+      <div className="proc-compact-failed-card" role="alert" aria-label={`Processing failed for ${filename}`}>
+        <div className="proc-failed-top">
+          <div className="proc-failed-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
               <line x1="12" y1="8" x2="12" y2="12" />
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
           </div>
-          <div className="proc-error-content">
-            <span className="proc-error-title">Processing Failed</span>
-            <p className="proc-error-msg">{error || message || 'An error occurred during ingestion.'}</p>
+          <div className="proc-failed-info">
+            <span className="proc-failed-name" title={filename}>{filename}</span>
+            <span className="proc-failed-sub">Couldn&apos;t finish processing</span>
           </div>
+          {onDismiss && (
+            <button
+              type="button"
+              className="proc-compact-dismiss-btn"
+              onClick={() => onDismiss(document_id)}
+              title="Remove"
+              aria-label="Remove"
+            >
+              ✕
+            </button>
+          )}
         </div>
-      ) : isCompleted ? (
-        <div className="proc-completed-banner">
-          <div className="proc-completed-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </div>
-          <div className="proc-completed-content">
-            <span className="proc-completed-title">Ready for Grounded Chat</span>
-            <span className="proc-completed-chunks">
-              {totalChunks > 0 ? `${totalChunks} chunks indexed in ChromaDB` : 'Indexed and ready to query'}
-            </span>
-          </div>
+        <p className="proc-failed-msg">{safeError}</p>
+        <div className="proc-failed-actions">
+          {onDismiss && (
+            <button
+              type="button"
+              className="proc-action-btn btn-ghost"
+              onClick={() => onDismiss(document_id)}
+            >
+              Remove
+            </button>
+          )}
+          {onRetry && (
+            <button
+              type="button"
+              className="proc-action-btn btn-retry"
+              onClick={() => onRetry(doc)}
+            >
+              Retry
+            </button>
+          )}
         </div>
-      ) : (
-        <>
-          {/* Active Stage Callout */}
-          <div className="proc-active-status-bar">
-            <span className="proc-active-indicator">
-              <span className="pulse-dot" />
-            </span>
-            <span className="proc-active-text">
-              {STAGE_LABELS[processing_stage] || 'Processing document…'}
-            </span>
-          </div>
+      </div>
+    );
+  }
 
-          {/* Visual Stage Stepper */}
-          <ul className="proc-stepper-list" aria-label="Ingestion Stages">
-            {PIPELINE_STEPS.map((step) => {
-              const isDone = currentRank > step.rank || isCompleted;
-              const isActive = !isCompleted && !isFailed && (
-                currentRank === step.rank ||
-                (step.key === 'UPLOADING' && currentRank === 2) // UPLOADED
-              );
-              const isFuture = !isDone && !isActive;
+  /* ── 3. IN PROGRESS: Compact modern progress card (Req 14, 15, 16) ── */
+  const humanStage = STAGE_LABELS[processing_stage] || 'Processing document…';
+  const clampedProgress = Math.min(Math.max(progress, 0), 100);
 
-              return (
-                <li
-                  key={step.key}
-                  className={`proc-step-item ${isDone ? 'done' : ''} ${isActive ? 'active' : ''} ${isFuture ? 'future' : ''}`}
-                >
-                  <span className="proc-step-bullet">
-                    {isDone ? (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    ) : isActive ? (
-                      <span className="proc-active-dot" />
-                    ) : (
-                      <span className="proc-future-circle" />
-                    )}
-                  </span>
-                  <span className="proc-step-label">
-                    {step.label}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+  return (
+    <div className="doc-processing-card" role="region" aria-label={`Processing ${filename}`}>
+      {/* File row */}
+      <div className="proc-card-header">
+        <div className="proc-file-info">
+          <span className="proc-ext-badge">{badgeLabel}</span>
+          <span className="proc-filename" title={filename}>{filename}</span>
+        </div>
+        <span className="proc-percentage">{clampedProgress}%</span>
+      </div>
 
-          {/* Progress Bar & Numeric Indicator */}
-          <div className="proc-progress-row">
-            <div className="proc-progress-track">
-              <div
-                className="proc-progress-fill"
-                style={{ width: `${Math.min(Math.max(progress, 0), 100)}%` }}
-              />
+      {/* Progress Track */}
+      <div className="proc-progress-row">
+        <div className="proc-progress-track">
+          <div
+            className="proc-progress-fill"
+            style={{ width: `${clampedProgress}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Current Step */}
+      <div className="proc-step-current-row">
+        <div className="proc-step-label-group">
+          <span className="proc-step-pulse" />
+          <span className="proc-step-current-text">{humanStage}</span>
+        </div>
+        {totalChunks > 0 && (
+          <span className="proc-step-chunks-count">
+            {chunks_processed || processed_chunks ? `${chunks_processed || processed_chunks} / ` : ''}
+            {totalChunks} chunks
+          </span>
+        )}
+      </div>
+
+      {/* Compact Mini-steps indicator */}
+      <div className="proc-mini-steps-list">
+        {PIPELINE_STEPS.map((step) => {
+          const isDone = currentRank > step.rank;
+          const isActive = currentRank === step.rank || (step.key === 'UPLOADING' && currentRank === 2);
+          return (
+            <div
+              key={step.key}
+              className={`proc-mini-step-pill ${isDone ? 'done' : ''} ${isActive ? 'active' : ''}`}
+              title={step.label}
+            >
+              {isDone ? '✓' : step.label}
             </div>
-            <span className="proc-percentage">{Math.min(Math.max(progress, 0), 100)}%</span>
-          </div>
-
-          {/* Chunks & Context Meta */}
-          <div className="proc-meta-footer">
-            {totalChunks > 0 ? (
-              <span className="proc-chunks-info">
-                {doneChunks > 0 ? `${doneChunks} / ` : ''}
-                {totalChunks} chunks
-              </span>
-            ) : (
-              <span className="proc-chunks-info">Extracting content…</span>
-            )}
-            {message && <span className="proc-status-msg" title={message}>{message}</span>}
-          </div>
-        </>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }
